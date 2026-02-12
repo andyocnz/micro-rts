@@ -33,15 +33,17 @@
 
     #hud {
       position: absolute;
-      bottom: 12px;
-      left: 175px;
-      right: 12px;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 35%;
+      min-width: 550px;
       height: 100px;
-      background: rgba(15, 15, 20, 0.6);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+      background: rgba(15, 15, 20, 0.5);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
       display: flex;
       align-items: stretch;
       padding: 8px 18px;
@@ -95,7 +97,8 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
+      padding-top: 6px;
       transition: all 0.1s ease;
       position: relative;
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 2px 4px rgba(0, 0, 0, 0.3);
@@ -127,19 +130,15 @@
 
     .action-btn .btn-cost {
       position: absolute;
-      top: -16px;
+      bottom: 2px;
       left: 0;
       right: 0;
       text-align: center;
       color: #ffd740;
-      font-size: 9px;
+      font-size: 8px;
+      font-weight: bold;
       pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-
-    .action-btn:hover .btn-cost {
-      opacity: 1;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
     }
 
     .action-btn .btn-key {
@@ -197,6 +196,76 @@
       border-radius: 4px;
       line-height: 1.6;
     }
+
+    #theme-selector {
+      position: absolute;
+      top: 12px;
+      left: 200px;
+      display: flex;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 6px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .theme-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      transition: all 0.2s;
+    }
+
+    .theme-btn:hover {
+      transform: scale(1.1);
+      border-color: #72d5ff;
+    }
+
+    .theme-btn.active {
+      border-color: #fff;
+      box-shadow: 0 0 8px #fff;
+    }
+
+    #difficulty-selector {
+      position: absolute;
+      top: 50px;
+      left: 12px;
+      display: flex;
+      gap: 4px;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 4px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .diff-btn {
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #888;
+      font-size: 11px;
+      font-weight: bold;
+      background: transparent;
+      transition: all 0.2s;
+    }
+
+    .diff-btn:hover {
+      color: #fff;
+      border-color: #72d5ff;
+    }
+
+    .diff-btn.active {
+      color: #fff;
+      border-color: #fff;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .diff-btn[data-diff="easy"].active { color: #4f4; border-color: #4f4; }
+    .diff-btn[data-diff="normal"].active { color: #ff0; border-color: #ff0; }
+    .diff-btn[data-diff="hard"].active { color: #f44; border-color: #f44; }
   </style>
 </head>
 
@@ -210,6 +279,16 @@
       <p>Select units and command them around the map.</p>
     </div>
     <div id="hud-actions"></div>
+  </div>
+  <div id="theme-selector">
+    <div class="theme-btn active" data-theme="verdant" style="background: #c2a86e;" title="Desert (Key 1)"></div>
+    <div class="theme-btn" data-theme="obsidian" style="background: #1a0a20;" title="Obsidian (Key 2)"></div>
+    <div class="theme-btn" data-theme="frozen" style="background: #eefaff;" title="Frozen (Key 3)"></div>
+  </div>
+  <div id="difficulty-selector">
+    <button class="diff-btn" data-diff="easy">Easy</button>
+    <button class="diff-btn active" data-diff="normal">Normal</button>
+    <button class="diff-btn" data-diff="hard">Hard</button>
   </div>
   <div id="controls-hint">
     WASD: Scroll | Scroll: Zoom<br>

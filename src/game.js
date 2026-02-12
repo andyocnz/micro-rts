@@ -15,8 +15,9 @@ import { SimpleAI } from './ai.js';
 import { initAudio, sfxSelect, sfxMove, sfxBuild, sfxError } from './audio.js';
 
 export class Game {
-  constructor(canvas) {
+  constructor(canvas, difficulty = 'normal') {
     this.canvas = canvas;
+    this.difficulty = difficulty;
 
     // Dual resource system: minerals + wood (all 4 teams)
     this.resources = {
@@ -37,8 +38,16 @@ export class Game {
     this.buildingManager = new BuildingManager();
     this.renderer = new Renderer(canvas, this.sprites);
 
-    // 3 AI opponents
-    this.ais = AI_TEAMS.map(t => new SimpleAI(t));
+    // 3 AI opponents with difficulty
+    this.ais = AI_TEAMS.map(t => new SimpleAI(t, difficulty));
+
+    // Apply hard-mode resource bonus to AI
+    for (const ai of this.ais) {
+      if (ai.startBonus > 0) {
+        this.resources[ai.team].minerals += ai.startBonus;
+        this.resources[ai.team].wood += ai.startBonus;
+      }
+    }
 
     // Build mode
     this.buildMode = null;
@@ -216,16 +225,20 @@ export class Game {
       const tx = Math.floor(p.x / TILE_SIZE);
       const ty = Math.floor(p.y / TILE_SIZE);
 
-      // Find a random walkable spot nearby (radius 2-3) so they "stand around" the building
+      // Find a random walkable spot nearby (radius 3-4) so they "stand around" the building
       let spawnX = tx, spawnY = ty;
       const candidates = [];
-      const radius = 3;
+      const radius = 4;
       for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist >= 1.5 && dist <= radius) { // Not too close, not too far
-            if (this.map.isWalkable(tx + dx, ty + dy)) {
-              candidates.push({ x: tx + dx, y: ty + dy });
+          const ctx_tx = tx + dx;
+          const ctx_ty = ty + dy;
+
+          // Must be walkable, in bounds, and NOT occupied by a building
+          if (dist >= 2.0 && dist <= radius) {
+            if (this.map.isWalkable(ctx_tx, ctx_ty) && !this.buildingManager.getBuildingAtTile(ctx_tx, ctx_ty)) {
+              candidates.push({ x: ctx_tx, y: ctx_ty });
             }
           }
         }
@@ -250,9 +263,6 @@ export class Game {
       }
 
       const unit = new Unit(spawnX, spawnY, p.unitType, p.team);
-      // Visual: Spawn at the entrance and walk to their spot
-      unit.x = p.x;
-      unit.y = p.y;
       this.unitManager.add(unit);
     }
 
@@ -461,6 +471,11 @@ export class Game {
       return;
     }
 
+    // Theme hotkeys
+    if (key === '1') { this.switchTheme('verdant'); return; }
+    if (key === '2') { this.switchTheme('obsidian'); return; }
+    if (key === '3') { this.switchTheme('frozen'); return; }
+
     const selected = this.unitManager.getSelected();
     const selectedBuildings = this.buildingManager.buildings.filter(b => b.selected && b.team === TEAM_BLUE);
     const hasWorker = selected.some(u => u.type === 'worker');
@@ -522,6 +537,17 @@ export class Game {
       } else {
         sfxError();
       }
+    }
+  }
+
+  switchTheme(theme) {
+    this.sprites.generate(theme);
+  }
+
+  setDifficulty(difficulty) {
+    this.difficulty = difficulty;
+    for (const ai of this.ais) {
+      ai.setDifficulty(difficulty);
     }
   }
 

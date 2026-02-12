@@ -1,5 +1,32 @@
 import { TILE_SIZE, UNIT_SIZE, TEAM_COLORS } from './constants.js';
 
+export const TILE_PALETTES = {
+  verdant: {
+    grass: { base: '#c2a86e', noise: ['#b89d60', '#cbb477', '#c2a86e', '#d4c08a', '#b5975a'], specular: '#d4c08a' },
+    water: { base: '#2266aa', noise: ['#1d5c99', '#2870b0', '#2266aa', '#2e78b8'], waves: 'rgba(255,255,255,0.15)' },
+    dirt: { base: '#9a8a6e', noise: ['#8c7c60', '#a89474', '#9a8a6e', '#b09a7c'], spots: '#7a6c54' },
+    tree: { trunk: '#6b5840', foliage: ['#5a7a3a', '#4e6e30', '#668844', '#557735'], highlight: '#7a9a55', base: '#c2a86e' },
+    mineral: { base: '#b09a70', crystal: ['#44ccff', '#33aadd', '#55ddff', '#2299cc', '#66eeff'] },
+    rock: { base: '#888', noise: ['#777', '#999', '#888'] }
+  },
+  obsidian: {
+    grass: { base: '#2a2a2e', noise: ['#1a1a1e', '#333338', '#2a2a2e', '#222226', '#121215'], specular: '#3a3a40' },
+    water: { base: '#1a0a20', noise: ['#250f30', '#1a0a20', '#15081a', '#301540'], waves: 'rgba(180,100,255,0.12)' },
+    dirt: { base: '#3d3d45', noise: ['#2e2e35', '#4d4d55', '#3d3d45', '#555560'], spots: '#1a1a20' },
+    tree: { trunk: '#2a1a1a', foliage: ['#2a5a2a', '#1e4e1e', '#336633', '#2a4a2a'], highlight: '#3a7a3a', base: '#2a2a2e' },
+    mineral: { base: '#222', crystal: ['#ff4444', '#dd2222', '#ff6666', '#aa1111', '#ff8888'] },
+    rock: { base: '#333', noise: ['#222', '#444', '#333'] }
+  },
+  frozen: {
+    grass: { base: '#eefaff', noise: ['#ddeecc', '#e6f5ff', '#ffffff', '#cceeff', '#bbddff'], specular: '#ffffff' },
+    water: { base: '#44aacc', noise: ['#3399bb', '#55bbdd', '#44aacc', '#66ccff'], waves: 'rgba(255,255,255,0.5)' },
+    dirt: { base: '#cbdce6', noise: ['#b8cada', '#d9e9f2', '#cbdce6', '#e6f0f5'], spots: '#a8b9c6' },
+    tree: { trunk: '#4a4035', foliage: ['#3a7a4a', '#2e6e3e', '#4a8a5a', '#357745'], highlight: '#5a9a6a', base: '#eefaff' },
+    mineral: { base: '#a0b0c0', crystal: ['#ffffff', '#e0f0ff', '#ccddff', '#bbccff', '#ddeeff'] },
+    rock: { base: '#cbdce6', noise: ['#b8cada', '#d9e9f2', '#cbdce6'] }
+  }
+};
+
 function createCanvas(w, h) {
   const c = document.createElement('canvas');
   c.width = w;
@@ -17,23 +44,22 @@ function seededRandom(seed) {
 
 // --- TILE SPRITES ---
 
-function drawGrassTile(variant = 0) {
+function drawGrassTile(variant = 0, p) {
   const c = createCanvas(TILE_SIZE, TILE_SIZE);
   const ctx = c.getContext('2d');
   const rng = seededRandom(variant * 777 + 42);
 
-  ctx.fillStyle = '#c2a86e';
+  ctx.fillStyle = p.base;
   ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
 
-  const sands = ['#b89d60', '#cbb477', '#c2a86e', '#d4c08a', '#b5975a'];
   for (let i = 0; i < 40; i++) {
     const x = Math.floor(rng() * TILE_SIZE);
     const y = Math.floor(rng() * TILE_SIZE);
-    ctx.fillStyle = sands[Math.floor(rng() * sands.length)];
+    ctx.fillStyle = p.noise[Math.floor(rng() * p.noise.length)];
     ctx.fillRect(x, y, 2, 2);
   }
 
-  ctx.fillStyle = '#d4c08a';
+  ctx.fillStyle = p.specular;
   for (let i = 0; i < 4; i++) {
     const x = Math.floor(rng() * (TILE_SIZE - 3));
     const y = Math.floor(rng() * (TILE_SIZE - 2));
@@ -43,23 +69,22 @@ function drawGrassTile(variant = 0) {
   return c;
 }
 
-function drawWaterTile(variant = 0) {
+function drawWaterTile(variant = 0, p) {
   const c = createCanvas(TILE_SIZE, TILE_SIZE);
   const ctx = c.getContext('2d');
   const rng = seededRandom(variant * 333 + 99);
 
-  ctx.fillStyle = '#2266aa';
+  ctx.fillStyle = p.base;
   ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
 
-  const blues = ['#1d5c99', '#2870b0', '#2266aa', '#2e78b8'];
   for (let i = 0; i < 30; i++) {
     const x = Math.floor(rng() * TILE_SIZE);
     const y = Math.floor(rng() * TILE_SIZE);
-    ctx.fillStyle = blues[Math.floor(rng() * blues.length)];
+    ctx.fillStyle = p.noise[Math.floor(rng() * p.noise.length)];
     ctx.fillRect(x, y, 3, 1);
   }
 
-  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillStyle = p.waves;
   for (let i = 0; i < 4; i++) {
     const x = Math.floor(rng() * (TILE_SIZE - 6));
     const y = Math.floor(rng() * TILE_SIZE);
@@ -69,23 +94,22 @@ function drawWaterTile(variant = 0) {
   return c;
 }
 
-function drawDirtTile(variant = 0) {
+function drawDirtTile(variant = 0, p) {
   const c = createCanvas(TILE_SIZE, TILE_SIZE);
   const ctx = c.getContext('2d');
   const rng = seededRandom(variant * 555 + 77);
 
-  ctx.fillStyle = '#9a8a6e';
+  ctx.fillStyle = p.base;
   ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
 
-  const dirts = ['#8c7c60', '#a89474', '#9a8a6e', '#b09a7c'];
   for (let i = 0; i < 35; i++) {
     const x = Math.floor(rng() * TILE_SIZE);
     const y = Math.floor(rng() * TILE_SIZE);
-    ctx.fillStyle = dirts[Math.floor(rng() * dirts.length)];
+    ctx.fillStyle = p.noise[Math.floor(rng() * p.noise.length)];
     ctx.fillRect(x, y, 2, 2);
   }
 
-  ctx.fillStyle = '#7a6c54';
+  ctx.fillStyle = p.spots;
   for (let i = 0; i < 3; i++) {
     const x = Math.floor(rng() * (TILE_SIZE - 3));
     const y = Math.floor(rng() * (TILE_SIZE - 3));
@@ -95,24 +119,24 @@ function drawDirtTile(variant = 0) {
   return c;
 }
 
-function drawTreeTile(variant = 0) {
+function drawTreeTile(variant = 0, p) {
   const c = createCanvas(TILE_SIZE, TILE_SIZE);
   const ctx = c.getContext('2d');
   const rng = seededRandom(variant * 111 + 55);
 
-  ctx.fillStyle = '#c2a86e';
+  ctx.fillStyle = p.base;
   ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
 
   ctx.fillStyle = 'rgba(0,0,0,0.15)';
   ctx.fillRect(15, 22, 5, 8);
 
-  ctx.fillStyle = '#6b5840';
+  ctx.fillStyle = p.trunk;
   ctx.fillRect(13, 18, 5, 12);
-  ctx.fillStyle = '#5a4a35';
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
   ctx.fillRect(14, 19, 1, 10);
 
   const cx = 15, cy = 13;
-  const colors = ['#5a7a3a', '#4e6e30', '#668844', '#557735'];
+  const leaves = p.foliage;
   for (let dy = -7; dy <= 7; dy++) {
     for (let dx = -8; dx <= 8; dx++) {
       const dist = Math.sqrt(dx * dx + dy * dy * 1.2);
@@ -120,14 +144,14 @@ function drawTreeTile(variant = 0) {
         const px = cx + dx;
         const py = cy + dy;
         if (px >= 0 && px < TILE_SIZE && py >= 0 && py < TILE_SIZE) {
-          ctx.fillStyle = colors[Math.floor(rng() * colors.length)];
+          ctx.fillStyle = leaves[Math.floor(rng() * leaves.length)];
           ctx.fillRect(px, py, 1, 1);
         }
       }
     }
   }
 
-  ctx.fillStyle = '#7a9a55';
+  ctx.fillStyle = p.highlight;
   for (let i = 0; i < 5; i++) {
     const x = cx - 4 + Math.floor(rng() * 8);
     const y = cy - 4 + Math.floor(rng() * 6);
@@ -137,75 +161,56 @@ function drawTreeTile(variant = 0) {
   return c;
 }
 
-function drawMineralTile(variant = 0) {
+function drawMineralTile(variant = 0, p) {
   const c = createCanvas(TILE_SIZE, TILE_SIZE);
   const ctx = c.getContext('2d');
   const rng = seededRandom(variant * 222 + 88);
 
-  ctx.fillStyle = '#b09a70';
+  ctx.fillStyle = p.base;
   ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
 
-  const crystalColors = ['#44ccff', '#33aadd', '#55ddff', '#2299cc', '#66eeff'];
+  const crystalColors = p.crystal;
   const numCrystals = 3 + Math.floor(rng() * 3);
-
   for (let i = 0; i < numCrystals; i++) {
-    const bx = 4 + Math.floor(rng() * 20);
-    const by = 4 + Math.floor(rng() * 20);
-    const h = 4 + Math.floor(rng() * 6);
-    const w = 2 + Math.floor(rng() * 3);
-
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.fillRect(bx + 1, by + h - 1, w, 2);
-
+    const x = 8 + Math.floor(rng() * 12);
+    const y = 8 + Math.floor(rng() * 12);
+    const size = 3 + Math.floor(rng() * 4);
     ctx.fillStyle = crystalColors[Math.floor(rng() * crystalColors.length)];
-    for (let dy = 0; dy < h; dy++) {
-      const shrink = Math.floor(dy * 0.4);
-      ctx.fillRect(bx + shrink, by + dy, w - shrink, 1);
-    }
-
-    ctx.fillStyle = '#aaeeff';
-    ctx.fillRect(bx, by, 1, Math.floor(h * 0.6));
-  }
-
-  ctx.fillStyle = '#ffffff';
-  for (let i = 0; i < 3; i++) {
-    const x = 3 + Math.floor(rng() * 26);
-    const y = 3 + Math.floor(rng() * 26);
-    ctx.fillRect(x, y, 1, 1);
+    ctx.beginPath();
+    ctx.moveTo(x, y - size);
+    ctx.lineTo(x + size / 2, y);
+    ctx.lineTo(x, y + size);
+    ctx.lineTo(x - size / 2, y);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(x - 1, y - size + 1, 1, 1);
   }
 
   return c;
 }
 
-function drawRockTile(variant = 0) {
+function drawRockTile(variant = 0, p) {
   const c = createCanvas(TILE_SIZE, TILE_SIZE);
   const ctx = c.getContext('2d');
-  const rng = seededRandom(variant * 444 + 66);
+  const rng = seededRandom(variant * 99 + 11);
 
-  ctx.fillStyle = '#8a8070';
+  ctx.fillStyle = p.base;
   ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
 
-  const grays = ['#7a7060', '#948878', '#8a8070', '#9e9282', '#766c5c'];
-  for (let i = 0; i < 50; i++) {
-    const x = Math.floor(rng() * TILE_SIZE);
-    const y = Math.floor(rng() * TILE_SIZE);
-    ctx.fillStyle = grays[Math.floor(rng() * grays.length)];
-    ctx.fillRect(x, y, 2 + Math.floor(rng() * 3), 2 + Math.floor(rng() * 2));
-  }
-
-  ctx.fillStyle = '#6a6050';
-  for (let i = 0; i < 2; i++) {
-    let x = Math.floor(rng() * TILE_SIZE);
-    let y = Math.floor(rng() * TILE_SIZE);
-    for (let j = 0; j < 8; j++) {
-      ctx.fillRect(x, y, 1, 1);
-      x += Math.floor(rng() * 3) - 1;
-      y += Math.floor(rng() * 3) - 1;
-    }
+  for (let i = 0; i < 4; i++) {
+    const x = 4 + rng() * 20;
+    const y = 4 + rng() * 20;
+    const w = 4 + rng() * 8;
+    const h = 4 + rng() * 6;
+    ctx.fillStyle = p.noise[Math.floor(rng() * p.noise.length)];
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+    ctx.strokeRect(x, y, w, h);
   }
 
   return c;
 }
+
 
 // --- UNIT SPRITES ---
 
@@ -958,10 +963,13 @@ export class SpriteSheet {
     this.generated = false;
   }
 
-  generate() {
-    if (this.generated) return;
+  generate(theme = 'verdant') {
+    if (this.currentTheme === theme && this.generated) return;
 
-    // Generate tile variants
+    const palette = TILE_PALETTES[theme] || TILE_PALETTES.verdant;
+    this.currentTheme = theme;
+
+    // Reset tile arrays
     this.tiles.grass = [];
     this.tiles.water = [];
     this.tiles.dirt = [];
@@ -970,48 +978,48 @@ export class SpriteSheet {
     this.tiles.rock = [];
 
     for (let i = 0; i < 4; i++) {
-      this.tiles.grass.push(drawGrassTile(i));
-      this.tiles.water.push(drawWaterTile(i));
-      this.tiles.dirt.push(drawDirtTile(i));
-      this.tiles.tree.push(drawTreeTile(i));
-      this.tiles.mineral.push(drawMineralTile(i));
-      this.tiles.rock.push(drawRockTile(i));
+      this.tiles.grass.push(drawGrassTile(i, palette.grass));
+      this.tiles.water.push(drawWaterTile(i, palette.water));
+      this.tiles.dirt.push(drawDirtTile(i, palette.dirt));
+      this.tiles.tree.push(drawTreeTile(i, palette.tree));
+      this.tiles.mineral.push(drawMineralTile(i, palette.mineral));
+      this.tiles.rock.push(drawRockTile(i, palette.rock));
     }
 
-    // Generate unit sprites for all teams
-    const teamIds = Object.keys(TEAM_COLORS).map(Number);
+    // Only generate units and buildings ONCE (they don't change with theme)
+    if (!this.generated) {
+      const teamIds = Object.keys(TEAM_COLORS).map(Number);
+      const unitTypes = ['worker', 'soldier', 'tank', 'rocket', 'bomber', 'battleship'];
+      const drawFns = {
+        worker: drawWorker,
+        soldier: drawSoldier,
+        tank: drawTank,
+        rocket: drawRocket,
+        bomber: drawBomber,
+        battleship: drawBattleship,
+      };
 
-    const unitTypes = ['worker', 'soldier', 'tank', 'rocket', 'bomber', 'battleship'];
-    const drawFns = {
-      worker: drawWorker,
-      soldier: drawSoldier,
-      tank: drawTank,
-      rocket: drawRocket,
-      bomber: drawBomber,
-      battleship: drawBattleship,
-    };
-
-    for (const type of unitTypes) {
-      this.units[type] = {};
-      for (const tid of teamIds) {
-        this.units[type][tid] = drawFns[type](tid);
+      for (const type of unitTypes) {
+        this.units[type] = {};
+        for (const tid of teamIds) {
+          this.units[type][tid] = drawFns[type](tid);
+        }
       }
-    }
 
-    // Generate building sprites for all teams
-    const buildingTypes = ['base', 'barracks', 'factory', 'tower', 'dock'];
-    const buildDrawFns = {
-      base: drawBase,
-      barracks: drawBarracks,
-      factory: drawFactory,
-      tower: drawTower,
-      dock: drawDock,
-    };
+      const buildingTypes = ['base', 'barracks', 'factory', 'tower', 'dock'];
+      const buildDrawFns = {
+        base: drawBase,
+        barracks: drawBarracks,
+        factory: drawFactory,
+        tower: drawTower,
+        dock: drawDock,
+      };
 
-    for (const type of buildingTypes) {
-      this.buildings[type] = {};
-      for (const tid of teamIds) {
-        this.buildings[type][tid] = buildDrawFns[type](tid);
+      for (const type of buildingTypes) {
+        this.buildings[type] = {};
+        for (const tid of teamIds) {
+          this.buildings[type][tid] = buildDrawFns[type](tid);
+        }
       }
     }
 
@@ -1022,8 +1030,12 @@ export class SpriteSheet {
     const tileNames = ['grass', 'water', 'dirt', 'tree', 'mineral', 'rock'];
     const name = tileNames[type];
     const variants = this.tiles[name];
-    if (!variants) return this.tiles.grass[0];
-    const idx = ((x * 7 + y * 13) & 0x7fffffff) % variants.length;
+    if (!variants || variants.length === 0) return this.tiles.grass ? this.tiles.grass[0] : null;
+
+    // Fallback if x or y are missing (though they shouldn't be now)
+    if (x === undefined || y === undefined) return variants[0];
+
+    const idx = ((x * 7 + y * 13) >>> 0) % variants.length;
     return variants[idx];
   }
 

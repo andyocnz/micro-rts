@@ -2,17 +2,89 @@ import { TILE_SIZE, MAP_WIDTH, MAP_HEIGHT, TILE_MINERAL, TILE_WATER } from './co
 import { Building, BUILDING_DEFS } from './buildings.js';
 import { Unit } from './units.js';
 
+const DIFFICULTY_PRESETS = {
+  easy: {
+    decisionInterval: 4,
+    waveInterval: 90,
+    maxWorkers: 4,
+    maxRockets: 1,
+    maxTanks: 1,
+    maxShips: 1,
+    maxTowers: 1,
+    waveMinFighters: 5,
+    aggroRange: 8,
+    buildsFactory: false,
+    buildsDock: false,
+    startBonus: 0,
+  },
+  normal: {
+    decisionInterval: 2,
+    waveInterval: 45,
+    maxWorkers: 6,
+    maxRockets: 2,
+    maxTanks: 2,
+    maxShips: 2,
+    maxTowers: 2,
+    waveMinFighters: 3,
+    aggroRange: 10,
+    buildsFactory: true,
+    buildsDock: true,
+    startBonus: 0,
+  },
+  hard: {
+    decisionInterval: 1,
+    waveInterval: 25,
+    maxWorkers: 8,
+    maxRockets: 3,
+    maxTanks: 3,
+    maxShips: 3,
+    maxTowers: 3,
+    waveMinFighters: 2,
+    aggroRange: 12,
+    buildsFactory: true,
+    buildsDock: true,
+    startBonus: 100,
+  },
+};
+
 export class SimpleAI {
-  constructor(team) {
+  constructor(team, difficulty = 'normal') {
     this.team = team;
     this.timer = 0;
-    this.decisionInterval = 2;
     this.hasBuiltBarracks = false;
     this.hasBuiltFactory = false;
     this.hasBuiltDock = false;
     this.towerCount = 0;
     this.waveTimer = 0;
-    this.waveInterval = 45;
+
+    const preset = DIFFICULTY_PRESETS[difficulty] || DIFFICULTY_PRESETS.normal;
+    this.decisionInterval = preset.decisionInterval;
+    this.waveInterval = preset.waveInterval;
+    this.maxWorkers = preset.maxWorkers;
+    this.maxRockets = preset.maxRockets;
+    this.maxTanks = preset.maxTanks;
+    this.maxShips = preset.maxShips;
+    this.maxTowers = preset.maxTowers;
+    this.waveMinFighters = preset.waveMinFighters;
+    this.aggroRange = preset.aggroRange;
+    this.buildsFactory = preset.buildsFactory;
+    this.buildsDock = preset.buildsDock;
+    this.startBonus = preset.startBonus;
+  }
+
+  setDifficulty(difficulty) {
+    const preset = DIFFICULTY_PRESETS[difficulty] || DIFFICULTY_PRESETS.normal;
+    this.decisionInterval = preset.decisionInterval;
+    this.waveInterval = preset.waveInterval;
+    this.maxWorkers = preset.maxWorkers;
+    this.maxRockets = preset.maxRockets;
+    this.maxTanks = preset.maxTanks;
+    this.maxShips = preset.maxShips;
+    this.maxTowers = preset.maxTowers;
+    this.waveMinFighters = preset.waveMinFighters;
+    this.aggroRange = preset.aggroRange;
+    this.buildsFactory = preset.buildsFactory;
+    this.buildsDock = preset.buildsDock;
   }
 
   update(dt, game) {
@@ -66,8 +138,8 @@ export class SimpleAI {
       }
     }
 
-    // 2b. Build factory after barracks
-    if (this.hasBuiltBarracks && myFactories.length === 0 && !this.hasBuiltFactory &&
+    // 2b. Build factory after barracks (if difficulty allows)
+    if (this.buildsFactory && this.hasBuiltBarracks && myFactories.length === 0 && !this.hasBuiltFactory &&
         res.minerals >= 150 && res.wood >= 100 && myWorkers.length > 0) {
       const builder = myWorkers.find(w => w.state === 'idle' || w.state === 'gathering');
       if (builder && myBases.length > 0) {
@@ -84,7 +156,7 @@ export class SimpleAI {
 
     // 2c. Build towers near base for defense
     const myTowers = myBuildings.filter(b => b.type === 'tower');
-    if (this.hasBuiltBarracks && myTowers.length < 2 && res.minerals >= 50 && res.wood >= 50 && myWorkers.length > 0) {
+    if (this.hasBuiltBarracks && myTowers.length < this.maxTowers && res.minerals >= 50 && res.wood >= 50 && myWorkers.length > 0) {
       const builder = myWorkers.find(w => w.state === 'idle' || w.state === 'gathering');
       if (builder && myBases.length > 0) {
         const base = myBases[0];
@@ -103,8 +175,8 @@ export class SimpleAI {
       }
     }
 
-    // 2d. Build dock near water
-    if (this.hasBuiltBarracks && !this.hasBuiltDock && myDocks.length === 0 &&
+    // 2d. Build dock near water (if difficulty allows)
+    if (this.buildsDock && this.hasBuiltBarracks && !this.hasBuiltDock && myDocks.length === 0 &&
         res.minerals >= 120 && res.wood >= 80 && myWorkers.length > 0) {
       const builder = myWorkers.find(w => w.state === 'idle' || w.state === 'gathering');
       if (builder && myBases.length > 0) {
@@ -119,16 +191,16 @@ export class SimpleAI {
       }
     }
 
-    // 3. Train units
+    // 3. Train units (caps based on difficulty)
     for (const base of myBases) {
-      if (myWorkers.length < 6 && base.canTrain('worker', res)) {
+      if (myWorkers.length < this.maxWorkers && base.canTrain('worker', res)) {
         game.spend(this.team, base.train('worker'));
       }
     }
 
     for (const barracks of myBarracks) {
       if (res.minerals >= 75) {
-        if (myRockets.length < 2 && barracks.canTrain('rocket', res)) {
+        if (myRockets.length < this.maxRockets && barracks.canTrain('rocket', res)) {
           game.spend(this.team, barracks.train('rocket'));
         } else if (barracks.canTrain('soldier', res)) {
           game.spend(this.team, barracks.train('soldier'));
@@ -137,22 +209,23 @@ export class SimpleAI {
     }
 
     for (const factory of myFactories) {
-      if (res.minerals >= 150 && myTanks.length < 2 && factory.canTrain('tank', res)) {
+      if (res.minerals >= 150 && myTanks.length < this.maxTanks && factory.canTrain('tank', res)) {
         game.spend(this.team, factory.train('tank'));
       }
     }
 
     for (const dock of myDocks) {
-      if (myShips.length < 2 && dock.canTrain('battleship', res)) {
+      if (myShips.length < this.maxShips && dock.canTrain('battleship', res)) {
         game.spend(this.team, dock.train('battleship'));
       }
     }
 
     // 4. Idle land combat units aggro nearby enemies
+    const aggroDist = TILE_SIZE * this.aggroRange;
     for (const fighter of myLandFighters) {
       if (fighter.state === 'idle') {
         const nearEnemy = this._findNearest(fighter, enemyUnits.filter(u => !u.naval));
-        if (nearEnemy && this._distance(fighter, nearEnemy) < TILE_SIZE * 10) {
+        if (nearEnemy && this._distance(fighter, nearEnemy) < aggroDist) {
           fighter.attackTarget(nearEnemy, game.map);
         }
       }
@@ -162,10 +235,9 @@ export class SimpleAI {
     for (const ship of myNavalFighters) {
       if (ship.state === 'idle') {
         const nearEnemy = this._findNearest(ship, enemyUnits);
-        if (nearEnemy && this._distance(ship, nearEnemy) < TILE_SIZE * 10) {
+        if (nearEnemy && this._distance(ship, nearEnemy) < aggroDist) {
           ship.attackTarget(nearEnemy, game.map);
         } else {
-          // Move to water near an enemy base
           const waterSpot = this._findWaterNearEnemy(game, enemyBuildings);
           if (waterSpot) ship.moveTo(game.map, waterSpot.x, waterSpot.y);
         }
@@ -173,7 +245,7 @@ export class SimpleAI {
     }
 
     // 5. Send attack wave periodically
-    if (this.waveTimer >= this.waveInterval && myLandFighters.length >= 3) {
+    if (this.waveTimer >= this.waveInterval && myLandFighters.length >= this.waveMinFighters) {
       this.waveTimer = 0;
       const targets = [...enemyUnits.filter(u => !u.naval), ...enemyBuildings].filter(t => t.hp > 0);
       if (targets.length > 0) {

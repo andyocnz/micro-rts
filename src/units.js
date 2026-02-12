@@ -25,7 +25,7 @@ export const UNIT_DEFS = {
     damage: 12,
     armor: 2,
     speed: 75,
-    attackRange: 1.5,
+    attackRange: 3.5,
     attackSpeed: 1.0,
     flying: false,
     hotkey: 's',
@@ -33,11 +33,11 @@ export const UNIT_DEFS = {
   },
   tank: {
     name: 'Tank',
-    hp: 200,
-    damage: 25,
+    hp: 220,
+    damage: 28,
     armor: 5,
     speed: 45,
-    attackRange: 2.0,
+    attackRange: 4.5,
     attackSpeed: 2.0,
     flying: false,
     hotkey: 'q',
@@ -124,7 +124,8 @@ export class Unit {
 
     // Visual
     this.animTimer = Math.random() * 2;
-    this.lastAttackHit = false;
+    this.lastAttackTime = 999;
+    this.lastAttackTarget = null;
   }
 
   get tileKey() {
@@ -133,6 +134,7 @@ export class Unit {
 
   update(dt, map, allUnits, buildings) {
     this.animTimer += dt;
+    this.lastAttackTime += dt;
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
 
     switch (this.state) {
@@ -233,6 +235,8 @@ export class Unit {
         const actualDmg = Math.max(1, this.damage - this.target.armor);
         this.target.hp -= actualDmg;
         this.attackCooldown = this.attackSpeed;
+        this.lastAttackTime = 0;
+        this.lastAttackTarget = { x: this.target.x, y: this.target.y };
 
         if (this.type === 'rocket' || this.type === 'bomber') {
           sfxExplosion();
@@ -283,6 +287,8 @@ export class Unit {
       if (this.attackCooldown <= 0) {
         bld.hp -= this.damage;
         this.attackCooldown = this.attackSpeed;
+        this.lastAttackTime = 0;
+        this.lastAttackTarget = { x: bld.x, y: bld.y };
 
         if (this.type === 'rocket' || this.type === 'bomber') {
           sfxExplosion();
@@ -623,13 +629,13 @@ export class Unit {
     const screen = camera.worldToScreen(this.x, this.y);
     const halfSize = (UNIT_SIZE / 2 + 2) * camera.zoom;
     return sx >= screen.x - halfSize && sx <= screen.x + halfSize &&
-           sy >= screen.y - halfSize && sy <= screen.y + halfSize;
+      sy >= screen.y - halfSize && sy <= screen.y + halfSize;
   }
 
   withinScreenBox(box, camera) {
     const screen = camera.worldToScreen(this.x, this.y);
     return screen.x >= box.x1 && screen.x <= box.x2 &&
-           screen.y >= box.y1 && screen.y <= box.y2;
+      screen.y >= box.y1 && screen.y <= box.y2;
   }
 }
 
@@ -662,6 +668,44 @@ export class UnitManager {
 
     for (const unit of this.units) {
       unit.update(dt, map, this.units, buildings);
+    }
+
+    // Separation: push overlapping units apart
+    const sepRadius = UNIT_SIZE * 0.9;
+    const sepForce = 120;
+    for (let i = 0; i < this.units.length; i++) {
+      const a = this.units[i];
+      for (let j = i + 1; j < this.units.length; j++) {
+        const b = this.units[j];
+        // Don't separate land from naval
+        if (a.naval !== b.naval) continue;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < sepRadius && dist > 0.1) {
+          const overlap = (sepRadius - dist) / sepRadius;
+          const pushX = (dx / dist) * overlap * sepForce * dt;
+          const pushY = (dy / dist) * overlap * sepForce * dt;
+          // Push both units away from each other
+          const aMoving = a.state === 'moving' || a.state === 'attacking' || a.state === 'attackingBuilding';
+          const bMoving = b.state === 'moving' || b.state === 'attacking' || b.state === 'attackingBuilding';
+          // Idle units yield more to moving units
+          const aWeight = aMoving ? 0.3 : 0.7;
+          const bWeight = bMoving ? 0.3 : 0.7;
+          a.x -= pushX * aWeight;
+          a.y -= pushY * aWeight;
+          b.x += pushX * bWeight;
+          b.y += pushY * bWeight;
+        } else if (dist <= 0.1) {
+          // Nearly exact overlap — nudge randomly
+          const angle = Math.random() * Math.PI * 2;
+          const nudge = sepRadius * 0.5;
+          a.x -= Math.cos(angle) * nudge;
+          a.y -= Math.sin(angle) * nudge;
+          b.x += Math.cos(angle) * nudge;
+          b.y += Math.sin(angle) * nudge;
+        }
+      }
     }
 
     return deaths;

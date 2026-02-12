@@ -176,7 +176,7 @@ export class Renderer {
     for (let y = tiles.startY; y < tiles.endY; y++) {
       for (let x = tiles.startX; x < tiles.endX; x++) {
         const type = map.getTile(x, y);
-        const sprite = this.sprites.getTile(type);
+        const sprite = this.sprites.getTile(type, x, y);
         if (sprite) {
           ctx.drawImage(sprite, x * TILE_SIZE, y * TILE_SIZE);
         }
@@ -381,6 +381,56 @@ export class Renderer {
         ctx.fillStyle = p > 0.6 ? '#4f4' : p > 0.3 ? '#ff0' : '#f44';
         ctx.fillRect(ux - barW / 2, uy - UNIT_SIZE / 2 - 6, barW * p, barH);
       }
+
+      // Combat Effects
+      if (u.lastAttackTime < 0.2 && u.lastAttackTarget) {
+        const alpha = 1 - (u.lastAttackTime / 0.2);
+        const tx = u.lastAttackTarget.x;
+        const ty = u.lastAttackTarget.y;
+
+        if (u.type === 'soldier' || u.type === 'worker') {
+          // Rapid muzzle flash and small tracer
+          ctx.strokeStyle = `rgba(255, 255, 100, ${alpha})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(ux, uy);
+          ctx.lineTo(tx, ty);
+          ctx.stroke();
+          // Flash at tip
+          ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(ux, uy, 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (u.type === 'tank' || u.type === 'battleship') {
+          // Heavy tracer
+          ctx.strokeStyle = `rgba(255, 200, 50, ${alpha})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(ux, uy - 4);
+          ctx.lineTo(tx, ty);
+          ctx.stroke();
+          // Large Muzzle Flash
+          ctx.fillStyle = `rgba(255, 150, 0, ${alpha})`;
+          ctx.beginPath(); ctx.arc(ux, uy - 4, 5, 0, Math.PI * 2); ctx.fill();
+        } else if (u.type === 'rocket' || u.type === 'bomber') {
+          // Projectile visual
+          const p = u.lastAttackTime / 0.2;
+          const px = ux + (tx - ux) * p;
+          const py = uy + (ty - uy) * p;
+
+          ctx.fillStyle = '#ff4400';
+          ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill();
+
+          // Smoke trail
+          if (Math.random() < 0.5) {
+            this.addParticle({
+              x: px, y: py,
+              vx: (Math.random() - 0.5) * 10, vy: -10,
+              life: 0.3, color: '#666', size: 3, type: 'smoke'
+            });
+          }
+        }
+      }
     }
   }
 
@@ -569,14 +619,15 @@ export class Renderer {
           const cost = def.trainCosts[unitType];
           const unitDef = UNIT_DEFS[unitType];
           const canAfford = res.minerals >= (cost.minerals || 0) && res.wood >= (cost.wood || 0) && b.trainQueue.length < 5;
-          const stats = `HP:${unitDef.hp} DMG:${unitDef.damage}`;
+          const stats = `${unitDef.name} - Cost: ${this._formatCost(cost)} | HP:${unitDef.hp} DMG:${unitDef.damage}`;
           actionsHtml += this._makeBtn(unitDef.name, unitDef.icon, unitDef.hotkey.toUpperCase(), cost, `train:${unitType}:${b.id}`, !canAfford, stats);
         }
         if (def.canBuild && def.canBuild.length > 0) {
           for (const buildType of def.canBuild) {
             const bDef = BUILDING_DEFS[buildType];
             const canAfford = res.minerals >= (bDef.cost.minerals || 0) && res.wood >= (bDef.cost.wood || 0);
-            actionsHtml += this._makeBtn(bDef.shortName, bDef.hotkey.toUpperCase(), bDef.hotkey.toUpperCase(), bDef.cost, `build:${buildType}`, !canAfford, `HP:${bDef.hp}`);
+            const buildStats = `${bDef.name} - Cost: ${this._formatCost(bDef.cost)} | HP:${bDef.hp}`;
+            actionsHtml += this._makeBtn(bDef.shortName, bDef.hotkey.toUpperCase(), bDef.hotkey.toUpperCase(), bDef.cost, `build:${buildType}`, !canAfford, buildStats);
           }
         }
       }
@@ -606,7 +657,8 @@ export class Renderer {
         const sorted = Object.entries(BUILDING_DEFS).sort((a, b) => a[1].cost.minerals - b[1].cost.minerals);
         for (const [bType, bDef] of sorted) {
           const canAfford = res.minerals >= (bDef.cost.minerals || 0) && res.wood >= (bDef.cost.wood || 0);
-          actionsHtml += this._makeBtn(bDef.shortName, bDef.hotkey.toUpperCase(), bDef.hotkey.toUpperCase(), bDef.cost, `build:${bType}`, !canAfford, `HP:${bDef.hp}`);
+          const bStats = `${bDef.name} - Cost: ${this._formatCost(bDef.cost)} | HP:${bDef.hp}`;
+          actionsHtml += this._makeBtn(bDef.shortName, bDef.hotkey.toUpperCase(), bDef.hotkey.toUpperCase(), bDef.cost, `build:${bType}`, !canAfford, bStats);
         }
       }
     }

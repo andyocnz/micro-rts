@@ -79,75 +79,85 @@ export class GameMap {
     // Step 2: Carve ocean border + natural river channels (island map)
     this._carveWaterChannels();
 
-    // Step 3: Tree clusters (harvestable for wood)
-    const numTreeClusters = 20 + Math.floor(rng() * 10);
-    for (let i = 0; i < numTreeClusters; i++) {
-      const cx = 5 + Math.floor(rng() * (this.width - 10));
-      const cy = 5 + Math.floor(rng() * (this.height - 10));
-      const radius = 2 + Math.floor(rng() * 4);
+    const W = this.width;
+    const H = this.height;
 
-      for (let dy = -radius; dy <= radius; dy++) {
-        for (let dx = -radius; dx <= radius; dx++) {
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist <= radius && rng() > 0.3) {
-            const tx = cx + dx;
-            const ty = cy + dy;
-            if (this.inBounds(tx, ty) && this.getTile(tx, ty) === TILE_GRASS) {
-              this.setTile(tx, ty, TILE_TREE);
-              this.woodAmounts.set(`${tx},${ty}`, 3000);
-            }
+    // Helper: mirror a top-left position to all 4 corners
+    const mirror4 = (x, y) => [
+      { x, y },                     // top-left
+      { x: W - 1 - x, y },         // top-right
+      { x, y: H - 1 - y },         // bottom-left
+      { x: W - 1 - x, y: H - 1 - y }, // bottom-right
+    ];
+
+    // Step 3: Symmetric tree clusters (same positions per corner)
+    // Define tree cluster centers relative to top-left corner
+    const treeClusterOffsets = [
+      { x: 14, y: 6, r: 3 },   // near base, right
+      { x: 6, y: 14, r: 3 },   // near base, below
+      { x: 16, y: 16, r: 4 },  // diagonal from base
+      { x: 22, y: 8, r: 3 },   // further out right
+      { x: 8, y: 22, r: 3 },   // further out below
+      { x: 24, y: 20, r: 3 },  // mid-field
+    ];
+
+    for (const cluster of treeClusterOffsets) {
+      const positions = mirror4(cluster.x, cluster.y);
+      for (const pos of positions) {
+        this._placeTreeCluster(pos.x, pos.y, cluster.r, rng);
+      }
+    }
+
+    // A few random tree clusters in the middle areas (shared territory)
+    const midClusters = 6;
+    for (let i = 0; i < midClusters; i++) {
+      const cx = 20 + Math.floor(rng() * (W - 40));
+      const cy = 20 + Math.floor(rng() * (H - 40));
+      this._placeTreeCluster(cx, cy, 2 + Math.floor(rng() * 3), rng);
+    }
+
+    // Step 4: Symmetric rock formations
+    const rockOffsets = [
+      { x: 20, y: 12 },
+      { x: 12, y: 20 },
+      { x: 25, y: 25 },
+    ];
+    for (const ro of rockOffsets) {
+      const positions = mirror4(ro.x, ro.y);
+      for (const pos of positions) {
+        for (let j = 0; j < 3; j++) {
+          const tx = pos.x + Math.floor(rng() * 3) - 1;
+          const ty = pos.y + Math.floor(rng() * 3) - 1;
+          if (this.inBounds(tx, ty) && this.getTile(tx, ty) === TILE_GRASS) {
+            this.setTile(tx, ty, TILE_ROCK);
           }
         }
       }
     }
 
-    // Step 4: Rock formations
-    const numRockClusters = 8 + Math.floor(rng() * 5);
-    for (let i = 0; i < numRockClusters; i++) {
-      const cx = 8 + Math.floor(rng() * (this.width - 16));
-      const cy = 8 + Math.floor(rng() * (this.height - 16));
-      const count = 2 + Math.floor(rng() * 4);
-      for (let j = 0; j < count; j++) {
-        const tx = cx + Math.floor(rng() * 4) - 2;
-        const ty = cy + Math.floor(rng() * 4) - 2;
-        if (this.inBounds(tx, ty) && this.getTile(tx, ty) === TILE_GRASS) {
-          this.setTile(tx, ty, TILE_ROCK);
-        }
-      }
-    }
-
-    // Step 5: Mineral patches (3 per corner + middle areas)
-    const W = this.width;
-    const H = this.height;
-    const mineralSpots = [
-      // Top-left (BLUE)
-      { x: 8 + Math.floor(rng() * 4), y: 8 + Math.floor(rng() * 4) },
-      { x: 5 + Math.floor(rng() * 3), y: 14 + Math.floor(rng() * 3) },
-      { x: 14 + Math.floor(rng() * 3), y: 5 + Math.floor(rng() * 3) },
-      // Top-right (RED)
-      { x: W - 12 + Math.floor(rng() * 4), y: 8 + Math.floor(rng() * 4) },
-      { x: W - 8 + Math.floor(rng() * 3), y: 14 + Math.floor(rng() * 3) },
-      { x: W - 18 + Math.floor(rng() * 3), y: 5 + Math.floor(rng() * 3) },
-      // Bottom-left (GREEN)
-      { x: 8 + Math.floor(rng() * 4), y: H - 12 + Math.floor(rng() * 4) },
-      { x: 5 + Math.floor(rng() * 3), y: H - 18 + Math.floor(rng() * 3) },
-      { x: 14 + Math.floor(rng() * 3), y: H - 8 + Math.floor(rng() * 3) },
-      // Bottom-right (YELLOW)
-      { x: W - 12 + Math.floor(rng() * 4), y: H - 12 + Math.floor(rng() * 4) },
-      { x: W - 8 + Math.floor(rng() * 3), y: H - 18 + Math.floor(rng() * 3) },
-      { x: W - 18 + Math.floor(rng() * 3), y: H - 8 + Math.floor(rng() * 3) },
+    // Step 5: Symmetric mineral patches (3 per corner, identical layout)
+    const mineralOffsets = [
+      { x: 9, y: 9 },    // close to base
+      { x: 6, y: 15 },   // south of base
+      { x: 15, y: 6 },   // east of base
     ];
 
-    for (const spot of mineralSpots) {
-      for (let j = 0; j < 6 + Math.floor(rng() * 4); j++) {
-        const tx = spot.x + Math.floor(rng() * 3) - 1;
-        const ty = spot.y + Math.floor(rng() * 3) - 1;
-        if (this.inBounds(tx, ty) && this.getTile(tx, ty) !== TILE_WATER) {
-          this.setTile(tx, ty, TILE_MINERAL);
-          this.mineralAmounts.set(`${tx},${ty}`, 5000);
-        }
+    for (const mo of mineralOffsets) {
+      const positions = mirror4(mo.x, mo.y);
+      for (const pos of positions) {
+        this._placeMineralPatch(pos.x, pos.y, 7);
       }
     }
+
+    // Step 5b: BIG central gold mine (contested resource)
+    const cx = Math.floor(W / 2);
+    const cy = Math.floor(H / 2);
+    this._placeMineralPatch(cx, cy, 16, 10000);
+    // Extra ring around center mine for richness
+    this._placeMineralPatch(cx - 2, cy - 1, 5, 10000);
+    this._placeMineralPatch(cx + 2, cy + 1, 5, 10000);
+    this._placeMineralPatch(cx - 1, cy + 2, 5, 10000);
+    this._placeMineralPatch(cx + 1, cy - 2, 5, 10000);
 
     // Step 6: Clear all 4 starting areas
     this.clearArea(3, 3, 8, 8);                     // Top-left (BLUE)
@@ -197,6 +207,35 @@ export class GameMap {
             break;
           }
         }
+      }
+    }
+  }
+
+  _placeTreeCluster(cx, cy, radius, rng) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist <= radius && rng() > 0.3) {
+          const tx = cx + dx;
+          const ty = cy + dy;
+          if (this.inBounds(tx, ty) && this.getTile(tx, ty) === TILE_GRASS) {
+            this.setTile(tx, ty, TILE_TREE);
+            this.woodAmounts.set(`${tx},${ty}`, 3000);
+          }
+        }
+      }
+    }
+  }
+
+  _placeMineralPatch(cx, cy, count, amount = 5000) {
+    for (let j = 0; j < count; j++) {
+      const angle = (j / count) * Math.PI * 2;
+      const r = j < count / 2 ? 0 : 1;
+      const tx = cx + Math.round(Math.cos(angle) * r);
+      const ty = cy + Math.round(Math.sin(angle) * r);
+      if (this.inBounds(tx, ty) && this.getTile(tx, ty) !== TILE_WATER) {
+        this.setTile(tx, ty, TILE_MINERAL);
+        this.mineralAmounts.set(`${tx},${ty}`, amount);
       }
     }
   }
