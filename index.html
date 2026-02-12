@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Micro RTS | Minimalist Strategy Warfare</title>
+  <meta name="description"
+    content="Engage in fast-paced real-time strategy warfare. Build your base, harvest resources, and lead your brigade to victory in this polished Micro RTS experience.">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0a0a0c;
+      overflow: hidden;
+      cursor: default;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      background: #1a1a1e;
+    }
+
+    #hud {
+      position: absolute;
+      bottom: 12px;
+      left: 175px;
+      right: 12px;
+      height: 100px;
+      background: rgba(15, 15, 20, 0.6);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+      display: flex;
+      align-items: stretch;
+      padding: 8px 18px;
+      color: #e0e0e0;
+      pointer-events: auto;
+    }
+
+    #hud-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding-right: 15px;
+      min-width: 180px;
+    }
+
+    #hud-info h3 {
+      color: #72d5ff;
+      margin-bottom: 4px;
+      font-size: 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      text-shadow: 0 0 8px rgba(114, 213, 255, 0.4);
+    }
+
+    #hud-info p {
+      margin: 2px 0;
+      color: #b0b0b8;
+      font-size: 12px;
+    }
+
+    #hud-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding-left: 20px;
+      border-left: 1px solid rgba(255, 255, 255, 0.1);
+      flex-wrap: wrap;
+      align-content: center;
+      max-width: 600px;
+    }
+
+    .action-btn {
+      width: 54px;
+      height: 54px;
+      background: rgba(58, 58, 62, 0.8);
+      border: 1px solid #555;
+      border-radius: 4px;
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s ease;
+      position: relative;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .action-btn:hover:not(.disabled) {
+      background: rgba(74, 74, 78, 0.9);
+      border-color: #72d5ff;
+      transform: translateY(-2px);
+      box-shadow: 0 0 12px rgba(114, 213, 255, 0.3);
+    }
+
+    .action-btn:active:not(.disabled) {
+      transform: translateY(0);
+      background: #202024;
+    }
+
+    .action-btn .btn-icon {
+      font-size: 20px;
+      margin-bottom: 1px;
+      filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.5));
+    }
+
+    .action-btn .btn-label {
+      font-size: 9px;
+      font-weight: bold;
+      color: #ccc;
+    }
+
+    .action-btn .btn-cost {
+      position: absolute;
+      top: -16px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: #ffd740;
+      font-size: 9px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .action-btn:hover .btn-cost {
+      opacity: 1;
+    }
+
+    .action-btn .btn-key {
+      position: absolute;
+      top: 1px;
+      right: 3px;
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 8px;
+      font-weight: bold;
+    }
+
+    .action-btn.disabled {
+      opacity: 0.3;
+      filter: grayscale(1);
+      cursor: not-allowed;
+    }
+
+    #resources {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(20, 20, 25, 0.9);
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 16px;
+      color: #fff;
+      font-weight: bold;
+      border-radius: 4px;
+      display: flex;
+      gap: 16px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .res-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .res-icon {
+      width: 14px;
+      height: 14px;
+      border-radius: 2px;
+    }
+
+    #controls-hint {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(20, 20, 25, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 12px;
+      color: #888;
+      font-size: 11px;
+      border-radius: 4px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="resources"><span style="color:#44ccff">Minerals: 0</span> &nbsp; <span style="color:#8B6914">Wood: 0</span>
+  </div>
+  <div id="hud">
+    <div id="hud-info">
+      <h3>Micro RTS</h3>
+      <p>Select units and command them around the map.</p>
+    </div>
+    <div id="hud-actions"></div>
+  </div>
+  <div id="controls-hint">
+    WASD: Scroll | Scroll: Zoom<br>
+    Left Click: Select<br>
+    Right Click: Move/Attack/Gather<br>
+    Click Minimap: Jump camera<br>
+    B:Barracks F:Factory T:Tower G:Dock H:HQ
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
