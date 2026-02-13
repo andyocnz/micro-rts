@@ -128,7 +128,7 @@ export class Building {
       this.trainQueue[0].timeLeft -= dt;
       if (this.trainQueue[0].timeLeft <= 0) {
         const trained = this.trainQueue.shift();
-        sfxTrain();
+        sfxTrain(this.x, this.y);
         const def = BUILDING_DEFS[this.type];
         const cx = (this.tileX + def.sizeTiles / 2) * TILE_SIZE;
         const cy = (this.tileY + def.sizeTiles - 0.5) * TILE_SIZE; // Near the south door
@@ -165,7 +165,7 @@ export class Building {
       this.attackCooldown = def.attackSpeed;
       this.lastShotTarget = this.attackTarget;
       this.lastShotTime = 0;
-      sfxAttack();
+      sfxAttack(this.attackTarget.x, this.attackTarget.y);
     }
   }
 

@@ -311,13 +311,13 @@ export class Unit {
         this.lastAttackTarget = { x: this.target.x, y: this.target.y };
 
         if (this.type === 'rocket' || this.type === 'bomber') {
-          sfxExplosion();
+          sfxExplosion(this.target.x, this.target.y);
         } else {
-          sfxAttack();
+          sfxAttack(this.target.x, this.target.y);
         }
 
         if (this.target.hp <= 0) {
-          sfxDeath();
+          sfxDeath(this.target.x, this.target.y);
           this.target = null;
           this.state = 'idle';
         }
@@ -386,13 +386,13 @@ export class Unit {
         this.lastAttackTarget = { x: bld.x, y: bld.y };
 
         if (this.type === 'rocket' || this.type === 'bomber') {
-          sfxExplosion();
+          sfxExplosion(bld.x, bld.y);
         } else {
-          sfxAttack();
+          sfxAttack(bld.x, bld.y);
         }
 
         if (bld.hp <= 0) {
-          sfxDeath();
+          sfxDeath(bld.x, bld.y);
           this.targetBld = null;
           this.state = 'idle';
         }
@@ -476,7 +476,7 @@ export class Unit {
           this.carrying += amount;
           this.carryType = 'minerals';
           map.mineralAmounts.set(key, remaining - amount);
-          sfxMine();
+          sfxMine(gtx * TILE_SIZE + TILE_SIZE / 2, gty * TILE_SIZE + TILE_SIZE / 2);
 
           if (remaining - amount <= 0) {
             map.setTile(gtx, gty, 2); // becomes dirt
@@ -488,7 +488,7 @@ export class Unit {
           this.carrying += amount;
           this.carryType = 'wood';
           map.woodAmounts.set(key, remaining - amount);
-          sfxChop();
+          sfxChop(gtx * TILE_SIZE + TILE_SIZE / 2, gty * TILE_SIZE + TILE_SIZE / 2);
 
           if (remaining - amount <= 0) {
             map.setTile(gtx, gty, 2); // becomes dirt
@@ -535,7 +535,7 @@ export class Unit {
       // Deposit
       this.path = [];
       this._onDeposit = true;
-      sfxDeposit();
+      sfxDeposit(this.x, this.y);
 
       // Go back to gathering
       if (this.gatherTarget) {

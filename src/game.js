@@ -12,7 +12,7 @@ import { Building, BuildingManager, BUILDING_DEFS } from './buildings.js';
 import { SpriteSheet } from './sprites.js';
 import { Renderer } from './renderer.js';
 import { SimpleAI } from './ai.js';
-import { initAudio, sfxSelect, sfxMove, sfxBuild, sfxError } from './audio.js';
+import { initAudio, setSoundAudibilityChecker, sfxSelect, sfxMove, sfxBuild, sfxError } from './audio.js';
 
 export class Game {
   constructor(canvas, difficulty = 'normal', options = {}) {
@@ -84,6 +84,7 @@ export class Game {
     this.fogVisible = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
     this.fogExplored = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
     this._recomputeFog();
+    setSoundAudibilityChecker((wx, wy) => this._isSoundAudibleWorld(wx, wy));
   }
 
   // --- Resource helpers ---
@@ -1093,5 +1094,14 @@ export class Game {
     const tx = Math.floor(wx / TILE_SIZE);
     const ty = Math.floor(wy / TILE_SIZE);
     return this.isTileVisible(tx, ty);
+  }
+
+  _isSoundAudibleWorld(wx, wy) {
+    const s = this.camera.worldToScreen(wx, wy);
+    const pad = 24;
+    const onScreen = s.x >= -pad && s.x <= this.canvas.width + pad &&
+      s.y >= -pad && s.y <= this.canvas.height + pad;
+    if (!onScreen) return false;
+    return this.isWorldVisible(wx, wy);
   }
 }
