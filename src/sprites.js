@@ -336,163 +336,161 @@ function drawSoldier(teamId) {
 }
 
 function drawTank(teamId) {
-  const c = createCanvas(UNIT_SIZE, UNIT_SIZE);
+  const size = 28;
+  const c = createCanvas(size, size);
   const ctx = c.getContext('2d');
   const colors = TEAM_COLORS[teamId];
 
   // Shadow
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
   ctx.beginPath();
-  ctx.ellipse(8, 14, 8, 3, 0, 0, Math.PI * 2);
+  ctx.ellipse(size / 2, size - 4, 12, 5, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Treads (Chunky)
+  // Treads (Bigger, longer)
+  ctx.fillStyle = '#222';
+  ctx.fillRect(2, 6, 6, 18);
+  ctx.fillRect(20, 6, 6, 18);
   ctx.fillStyle = '#333';
-  ctx.fillRect(1, 5, 4, 10);
-  ctx.fillRect(11, 5, 4, 10);
-  ctx.fillStyle = '#444';
-  for (let i = 0; i < 5; i++) {
-    ctx.fillRect(1, 6 + i * 2, 4, 1);
-    ctx.fillRect(11, 6 + i * 2, 4, 1);
+  for (let i = 0; i < 7; i++) {
+    ctx.fillRect(2, 7 + i * 2.5, 6, 1);
+    ctx.fillRect(20, 7 + i * 2.5, 6, 1);
   }
 
-  // Hull (Rounded edges)
+  // Hull
   ctx.fillStyle = colors.dark;
-  ctx.fillRect(3, 4, 10, 10);
+  ctx.fillRect(5, 5, 18, 18);
   ctx.fillStyle = colors.primary;
-  ctx.fillRect(4, 5, 8, 8);
+  ctx.fillRect(7, 7, 14, 14);
 
-  // Hull Highlight
-  ctx.fillStyle = colors.light;
-  ctx.fillRect(4, 5, 6, 1);
-  ctx.fillRect(4, 5, 1, 6);
-
-  // Turret base
-  ctx.fillStyle = '#555';
-  ctx.fillRect(5, 6, 6, 6);
+  // Turret
+  ctx.fillStyle = '#444';
+  ctx.fillRect(9, 9, 10, 10);
   ctx.fillStyle = colors.primary;
-  ctx.fillRect(6, 7, 4, 4);
+  ctx.fillRect(10, 10, 8, 8);
 
-  // Cannon barrel (Recoiling look)
+  // Cannon
   ctx.fillStyle = '#666';
-  ctx.fillRect(7, 0, 2, 8);
-  ctx.fillStyle = '#888'; // Top highlight
-  ctx.fillRect(7, 0, 1, 8);
-
-  // Muzzle brake
+  ctx.fillRect(13, 0, 3, 12);
   ctx.fillStyle = '#333';
-  ctx.fillRect(6, 0, 4, 2);
-
-  // Hatch
-  ctx.fillStyle = '#222';
-  ctx.fillRect(7, 8, 2, 2);
+  ctx.fillRect(12, 0, 5, 3); // Muzzle
 
   return c;
 }
 
 function drawRocket(teamId) {
-  const c = createCanvas(UNIT_SIZE, UNIT_SIZE);
+  const size = 20;
+  const c = createCanvas(size, size);
   const ctx = c.getContext('2d');
   const colors = TEAM_COLORS[teamId];
-
   const skin = '#FFCC99';
 
   // Shadow
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.beginPath();
-  ctx.ellipse(8, 14, 5, 2, 0, 0, Math.PI * 2);
+  ctx.ellipse(size / 2, size - 2, 7, 3, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Body - Camo fatigues
-  ctx.fillStyle = '#3d4e30';
-  ctx.fillRect(5, 7, 6, 5);
-  ctx.fillStyle = '#2d3e20';
-  ctx.fillRect(5, 12, 2, 3);
-  ctx.fillRect(9, 12, 2, 3);
-
-  // Head with helmet
+  // Helmet & Head
   ctx.fillStyle = skin;
-  ctx.fillRect(6, 3, 4, 4);
+  ctx.fillRect(size / 2 - 2, 4, 4, 4);
   ctx.fillStyle = '#3d4e30';
-  ctx.fillRect(5, 2, 6, 2);
+  ctx.fillRect(size / 2 - 3, 3, 6, 2);
 
-  // Rocket launcher (Large and visible)
+  // Launcher (Much larger)
   ctx.fillStyle = '#444';
-  ctx.fillRect(10, 2, 5, 4); // Launcher box
-  ctx.fillStyle = '#777';
-  ctx.fillRect(11, 0, 3, 8); // Tube
-  ctx.fillStyle = '#333';
-  ctx.fillRect(11, 0, 3, 1); // Front rim
+  ctx.fillRect(size / 2 + 2, 2, 6, 12); // Long Tube
+  ctx.fillStyle = '#222';
+  ctx.fillRect(size / 2 + 1, 2, 8, 2); // Front heavy part
 
-  // Rocket tip
-  ctx.fillStyle = '#ff3d00';
-  ctx.fillRect(12, 0, 1, 1);
-
-  // Backpack
-  ctx.fillStyle = '#4e3b2a';
-  ctx.fillRect(4, 7, 2, 5);
-
-  // Team identification (Goggle/Visor)
-  ctx.fillStyle = colors.primary;
-  ctx.fillRect(6, 4, 4, 1);
+  // Body
+  ctx.fillStyle = '#3d4e30';
+  ctx.fillRect(size / 2 - 3, 8, 6, 8);
 
   return c;
 }
 
-function drawBomber(teamId) {
-  const c = createCanvas(UNIT_SIZE, UNIT_SIZE);
+function drawBattleship(teamId) {
+  const w = 48;
+  const h = 20;
+  const c = createCanvas(w, h);
+  const ctx = c.getContext('2d');
+  const colors = TEAM_COLORS[teamId];
+
+  // Water Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.beginPath();
+  ctx.ellipse(w / 2, h / 2 + 4, w / 2 + 2, h / 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Hull (Sleek and pointed)
+  ctx.fillStyle = '#455a64';
+  ctx.beginPath();
+  ctx.moveTo(w, h / 2);
+  ctx.lineTo(w - 10, 2);
+  ctx.lineTo(0, 2);
+  ctx.lineTo(0, h - 2);
+  ctx.lineTo(w - 10, h - 2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Upper Deck (Team color)
+  ctx.fillStyle = colors.dark;
+  ctx.fillRect(5, 5, w - 20, h - 10);
+
+  // Gun Turrets
+  ctx.fillStyle = '#78909c';
+  // Front Turret
+  ctx.fillRect(w - 18, h / 2 - 3, 6, 6);
+  ctx.fillStyle = '#222';
+  ctx.fillRect(w - 14, h / 2 - 1, 10, 2); // Double barrel
+
+  // Rear Turret
+  ctx.fillStyle = '#78909c';
+  ctx.fillRect(10, h / 2 - 3, 6, 6);
+  ctx.fillStyle = '#222';
+  ctx.fillRect(14, h / 2 - 1, 10, 2);
+
+  return c;
+}
+
+function drawHelicopter(teamId) {
+  const size = 32;
+  const c = createCanvas(size, size);
   const ctx = c.getContext('2d');
   const colors = TEAM_COLORS[teamId];
 
   // Air Shadow
   ctx.fillStyle = 'rgba(0,0,0,0.1)';
   ctx.beginPath();
-  ctx.ellipse(8, 15, 8, 2, 0, 0, Math.PI * 2);
+  ctx.ellipse(size / 2, size - 2, 8, 3, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Wings (Swept back)
+  // Tail Boom
   ctx.fillStyle = colors.dark;
-  ctx.beginPath();
-  ctx.moveTo(8, 4);
-  ctx.lineTo(0, 8);
-  ctx.lineTo(0, 10);
-  ctx.lineTo(8, 8);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(8, 4);
-  ctx.lineTo(16, 8);
-  ctx.lineTo(16, 10);
-  ctx.lineTo(8, 8);
-  ctx.fill();
-
+  ctx.fillRect(size / 2 - 2, 16, 4, 10);
   ctx.fillStyle = colors.primary;
-  ctx.fillRect(0, 8, 16, 1); // Leading edge highlight
+  ctx.fillRect(size / 2 - 3, 24, 6, 2); // Tail rotor pylon
 
-  // Fuselage (Sleek)
+  // Body (Pod-like)
   ctx.fillStyle = '#cfd8dc';
-  ctx.fillRect(6, 2, 4, 12);
-  ctx.fillStyle = '#90a4ae';
-  ctx.fillRect(9, 2, 1, 12); // Shading
+  ctx.beginPath();
+  ctx.ellipse(size / 2, 12, 7, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
 
-  // Nose
-  ctx.fillStyle = '#455a64';
-  ctx.fillRect(7, 0, 2, 3);
-
-  // Cockpit (Glassy)
+  // Cockpit (Glass)
   ctx.fillStyle = '#81d4fa';
-  ctx.fillRect(7, 3, 2, 3);
+  ctx.beginPath();
+  ctx.ellipse(size / 2, 8, 5, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.fillStyle = '#fff';
-  ctx.fillRect(7, 3, 1, 1);
+  ctx.fillRect(size / 2 - 2, 5, 2, 2); // Glint
 
-  // Tail Fin
-  ctx.fillStyle = colors.primary;
-  ctx.fillRect(7, 12, 2, 3);
-  ctx.fillRect(5, 13, 6, 1);
-
-  // Engines (Glow)
-  ctx.fillStyle = '#ffab00';
-  ctx.fillRect(3, 9, 2, 2);
-  ctx.fillRect(11, 9, 2, 2);
+  // Landing Skids
+  ctx.fillStyle = '#444';
+  ctx.fillRect(size / 2 - 8, 10, 2, 14);
+  ctx.fillRect(size / 2 + 6, 10, 2, 14);
+  ctx.fillRect(size / 2 - 9, 22, 18, 2);
 
   return c;
 }
@@ -852,54 +850,6 @@ function drawTower(teamId) {
   return c;
 }
 
-// --- BATTLESHIP (naval unit) ---
-function drawBattleship(teamId) {
-  const c = createCanvas(UNIT_SIZE, UNIT_SIZE);
-  const ctx = c.getContext('2d');
-  const colors = TEAM_COLORS[teamId];
-
-  // Water wake
-  ctx.fillStyle = 'rgba(255,255,255,0.12)';
-  ctx.beginPath();
-  ctx.ellipse(8, 14, 6, 2, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Hull (pointed bow at top)
-  ctx.fillStyle = colors.dark;
-  ctx.beginPath();
-  ctx.moveTo(8, 1);
-  ctx.lineTo(13, 5);
-  ctx.lineTo(13, 13);
-  ctx.lineTo(3, 13);
-  ctx.lineTo(3, 5);
-  ctx.closePath();
-  ctx.fill();
-
-  // Deck
-  ctx.fillStyle = '#8B7355';
-  ctx.fillRect(4, 6, 8, 6);
-
-  // Superstructure
-  ctx.fillStyle = '#555';
-  ctx.fillRect(5, 4, 6, 5);
-  ctx.fillStyle = colors.primary;
-  ctx.fillRect(6, 3, 4, 3);
-
-  // Main cannon
-  ctx.fillStyle = '#666';
-  ctx.fillRect(7, 0, 2, 5);
-  ctx.fillStyle = '#888';
-  ctx.fillRect(7, 0, 1, 5);
-
-  // Team flag
-  ctx.fillStyle = colors.primary;
-  ctx.fillRect(10, 10, 3, 3);
-  ctx.fillStyle = colors.light;
-  ctx.fillRect(10, 10, 3, 1);
-
-  return c;
-}
-
 // --- DOCK (building) ---
 function drawDock(teamId) {
   const size = TILE_SIZE * 2;
@@ -995,7 +945,7 @@ export class SpriteSheet {
         soldier: drawSoldier,
         tank: drawTank,
         rocket: drawRocket,
-        bomber: drawBomber,
+        bomber: drawHelicopter,
         battleship: drawBattleship,
       };
 

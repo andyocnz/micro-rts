@@ -40,7 +40,7 @@ export const UNIT_DEFS = {
     attackRange: 4.5,
     attackSpeed: 2.0,
     flying: false,
-    hotkey: 'q',
+    hotkey: 't',
     icon: 'T',
   },
   rocket: {
@@ -56,7 +56,7 @@ export const UNIT_DEFS = {
     icon: 'R',
   },
   bomber: {
-    name: 'Bomber',
+    name: 'Helicopter',
     hp: 100,
     damage: 40,
     armor: 1,
@@ -64,11 +64,11 @@ export const UNIT_DEFS = {
     attackRange: 3.0,
     attackSpeed: 3.5,
     flying: true,
-    hotkey: 'e',
-    icon: 'B',
+    hotkey: 'h',
+    icon: 'H',
   },
   battleship: {
-    name: 'Battleship',
+    name: 'Marine Ship',
     hp: 250,
     damage: 35,
     armor: 4,
@@ -77,8 +77,8 @@ export const UNIT_DEFS = {
     attackSpeed: 3.0,
     flying: false,
     naval: true,
-    hotkey: 'g',
-    icon: 'BS',
+    hotkey: 'm',
+    icon: 'M',
   },
 };
 

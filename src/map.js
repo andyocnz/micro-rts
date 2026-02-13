@@ -159,6 +159,9 @@ export class GameMap {
     this._placeMineralPatch(cx - 1, cy + 2, 5, 10000);
     this._placeMineralPatch(cx + 1, cy - 2, 5, 10000);
 
+    // Step 5c: Clear trees/rocks around all mineral patches so they're accessible
+    this._clearAroundMinerals();
+
     // Step 6: Clear all 4 starting areas
     this.clearArea(3, 3, 8, 8);                     // Top-left (BLUE)
     this.clearArea(W - 11, 3, 8, 8);                // Top-right (RED)
@@ -221,6 +224,28 @@ export class GameMap {
           if (this.inBounds(tx, ty) && this.getTile(tx, ty) === TILE_GRASS) {
             this.setTile(tx, ty, TILE_TREE);
             this.woodAmounts.set(`${tx},${ty}`, 3000);
+          }
+        }
+      }
+    }
+  }
+
+  _clearAroundMinerals() {
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        if (this.getTile(x, y) !== TILE_MINERAL) continue;
+        // Clear trees and rocks within 2 tiles of any mineral
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x + dx;
+            const ny = y + dy;
+            if (!this.inBounds(nx, ny)) continue;
+            const tile = this.getTile(nx, ny);
+            if (tile === TILE_TREE || tile === TILE_ROCK) {
+              this.setTile(nx, ny, TILE_GRASS);
+              this.woodAmounts.delete(`${nx},${ny}`);
+            }
           }
         }
       }

@@ -50,8 +50,8 @@ export const BUILDING_DEFS = {
     hotkey: 'f',
   },
   tower: {
-    name: 'Tower',
-    shortName: 'Tower',
+    name: 'Defense Tower',
+    shortName: 'Def Tower',
     cost: { minerals: 50, wood: 50 },
     buildTime: 6,
     hp: 250,
@@ -60,14 +60,14 @@ export const BUILDING_DEFS = {
     trainCosts: {},
     trainTimes: {},
     canBuild: [],
-    hotkey: 't',
+    hotkey: 'd',
     attackRange: 6,
     attackDamage: 10,
     attackSpeed: 1.5,
   },
   dock: {
-    name: 'Dock',
-    shortName: 'Dock',
+    name: 'Navy Dock',
+    shortName: 'Navy Dock',
     cost: { minerals: 120, wood: 80 },
     buildTime: 10,
     hp: 300,
@@ -76,7 +76,7 @@ export const BUILDING_DEFS = {
     trainCosts: { battleship: { minerals: 200, wood: 100 } },
     trainTimes: { battleship: 15 },
     canBuild: [],
-    hotkey: 'g',
+    hotkey: 'n',
   },
 };
 
@@ -131,7 +131,7 @@ export class Building {
         const def = BUILDING_DEFS[this.type];
         const cx = (this.tileX + def.sizeTiles / 2) * TILE_SIZE;
         const cy = (this.tileY + def.sizeTiles - 0.5) * TILE_SIZE; // Near the south door
-        return { unitType: trained.type, team: this.team, x: cx, y: cy };
+        return { unitType: trained.type, team: this.team, x: cx, y: cy, bTileX: this.tileX, bTileY: this.tileY, bSize: def.sizeTiles };
       }
     }
     return null;

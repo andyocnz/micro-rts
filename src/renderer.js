@@ -299,8 +299,25 @@ export class Renderer {
         // Subtle Team Halo/Glow to pop from background
         ctx.shadowColor = teamColor;
         ctx.shadowBlur = 4;
-        ctx.drawImage(img, ux - UNIT_SIZE / 2, uy - UNIT_SIZE / 2);
+        ctx.drawImage(img, ux - img.width / 2, uy - img.height / 2);
         ctx.shadowBlur = 0;
+
+        // Special: Helicopter Rotors
+        if (u.type === 'bomber') {
+          const rotorAngle = u.animTimer * 25; // Spin speed
+          ctx.save();
+          ctx.translate(ux, uy - 4); // Center of rotor on helicopter body
+          ctx.rotate(rotorAngle);
+
+          ctx.strokeStyle = 'rgba(50, 50, 50, 0.7)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(-15, 0); ctx.lineTo(15, 0);
+          ctx.moveTo(0, -15); ctx.lineTo(0, 15);
+          ctx.stroke();
+
+          ctx.restore();
+        }
       }
 
       // Gathering animation (Picking / Chopping)
@@ -336,6 +353,39 @@ export class Renderer {
             vy: -20 - Math.random() * 40,
             life: 0.3,
             color: isMinerals ? '#ffd740' : '#8B6914',
+            size: 1.5
+          });
+        }
+      }
+
+      // Building animation (Hammering)
+      if (u.state === 'building' && u.path.length === 0) {
+        const swing = Math.sin(u.animTimer * 15) * 0.8;
+
+        ctx.save();
+        ctx.translate(ux + 5, uy);
+        ctx.rotate(swing);
+
+        // Hammer handle
+        ctx.fillStyle = '#5d4037';
+        ctx.fillRect(0, -1, 8, 2);
+
+        // Hammer head
+        ctx.fillStyle = '#777';
+        ctx.fillRect(6, -4, 4, 8);
+        ctx.fillStyle = '#999'; // Highlight
+        ctx.fillRect(6, -4, 4, 2);
+
+        ctx.restore();
+
+        // Wood chips / Construction dust
+        if (Math.random() < 0.15) {
+          this.addParticle({
+            x: ux + 10, y: uy,
+            vx: (Math.random() - 0.5) * 30,
+            vy: -15 - Math.random() * 20,
+            life: 0.4,
+            color: '#d2b48c',
             size: 1.5
           });
         }

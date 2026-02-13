@@ -220,44 +220,24 @@ export class Game {
       }
     }
 
-    // Spawn produced units
+    // Spawn produced units — assemble in ordered ring around building
     for (const p of produced) {
-      const tx = Math.floor(p.x / TILE_SIZE);
-      const ty = Math.floor(p.y / TILE_SIZE);
+      let spawnX = Math.floor(p.x / TILE_SIZE);
+      let spawnY = Math.floor(p.y / TILE_SIZE);
+      let found = false;
+      const isNaval = UNIT_DEFS[p.unitType] && UNIT_DEFS[p.unitType].naval;
 
-      // Find a random walkable spot nearby (radius 3-4) so they "stand around" the building
-      let spawnX = tx, spawnY = ty;
-      const candidates = [];
-      const radius = 4;
-      for (let dy = -radius; dy <= radius; dy++) {
-        for (let dx = -radius; dx <= radius; dx++) {
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const ctx_tx = tx + dx;
-          const ctx_ty = ty + dy;
-
-          // Must be walkable, in bounds, and NOT occupied by a building
-          if (dist >= 2.0 && dist <= radius) {
-            if (this.map.isWalkable(ctx_tx, ctx_ty) && !this.buildingManager.getBuildingAtTile(ctx_tx, ctx_ty)) {
-              candidates.push({ x: ctx_tx, y: ctx_ty });
-            }
-          }
-        }
-      }
-
-      if (candidates.length > 0) {
-        const spot = candidates[Math.floor(Math.random() * candidates.length)];
-        spawnX = spot.x;
-        spawnY = spot.y;
-      } else {
-        // Fallback to original searches if no clear spots found
-        let found = false;
-        for (let r = 1; r < 5 && !found; r++) {
-          for (let dy = -r; dy <= r && !found; dy++) {
-            for (let dx = -r; dx <= r && !found; dx++) {
-              if (this.map.isWalkable(tx + dx, ty + dy)) {
-                spawnX = tx + dx; spawnY = ty + dy; found = true;
-              }
-            }
+      // Try expanding rings around the building perimeter
+      for (let d = 1; d <= 5 && !found; d++) {
+        const ring = this._getBuildingRingPositions(p.bTileX, p.bTileY, p.bSize, d);
+        for (const pos of ring) {
+          const tileOk = isNaval ? this.map.isSwimmable(pos.x, pos.y) : this.map.isWalkable(pos.x, pos.y);
+          if (tileOk && !this.buildingManager.getBuildingAtTile(pos.x, pos.y) &&
+              !this._isTileOccupiedByUnit(pos.x, pos.y)) {
+            spawnX = pos.x;
+            spawnY = pos.y;
+            found = true;
+            break;
           }
         }
       }
@@ -553,5 +533,45 @@ export class Game {
 
   resize(w, h) {
     this.camera.resize(w, h);
+  }
+
+  // Generate ordered ring positions around a building perimeter at distance d
+  _getBuildingRingPositions(bx, by, s, d) {
+    const positions = [];
+    const minX = bx - d;
+    const maxX = bx + s - 1 + d;
+    const minY = by - d;
+    const maxY = by + s - 1 + d;
+
+    // Bottom edge (left to right)
+    for (let x = minX; x <= maxX; x++) positions.push({ x, y: maxY });
+    // Right edge (bottom-1 to top)
+    for (let y = maxY - 1; y >= minY; y--) positions.push({ x: maxX, y });
+    // Top edge (right-1 to left)
+    for (let x = maxX - 1; x >= minX; x--) positions.push({ x, y: minY });
+    // Left edge (top+1 to bottom-1)
+    for (let y = minY + 1; y < maxY; y++) positions.push({ x: minX, y });
+
+    // Sort by distance from building's south-center exit so units fill near the door first
+    const exitX = bx + s / 2;
+    const exitY = by + s;
+    positions.sort((a, b) => {
+      const da = (a.x - exitX) ** 2 + (a.y - exitY) ** 2;
+      const db = (b.x - exitX) ** 2 + (b.y - exitY) ** 2;
+      return da - db;
+    });
+
+    return positions;
+  }
+
+  // Check if a tile is already occupied by a living unit
+  _isTileOccupiedByUnit(tx, ty) {
+    for (const u of this.unitManager.units) {
+      if (u.hp <= 0) continue;
+      const ux = Math.floor(u.x / TILE_SIZE);
+      const uy = Math.floor(u.y / TILE_SIZE);
+      if (ux === tx && uy === ty) return true;
+    }
+    return false;
   }
 }
