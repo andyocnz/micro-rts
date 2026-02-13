@@ -26,8 +26,8 @@ export const BUILDING_DEFS = {
     sizeTiles: 3,
     produces: ['soldier', 'rocket'],
     trainCosts: {
-      soldier: { minerals: 75, wood: 0 },
-      rocket: { minerals: 100, wood: 50 },
+      soldier: { minerals: 95, wood: 0 },
+      rocket: { minerals: 90, wood: 30 },
     },
     trainTimes: { soldier: 6, rocket: 10 },
     canBuild: [],
@@ -43,7 +43,7 @@ export const BUILDING_DEFS = {
     produces: ['tank', 'bomber'],
     trainCosts: {
       tank: { minerals: 150, wood: 50 },
-      bomber: { minerals: 200, wood: 75 },
+      bomber: { minerals: 160, wood: 60 },
     },
     trainTimes: { tank: 12, bomber: 15 },
     canBuild: [],

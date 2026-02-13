@@ -17,6 +17,15 @@ const UNIT_COUNT_ICONS = {
   battleship: '🚢',
 };
 
+function getUnitTrainCost(unitType) {
+  for (const bDef of Object.values(BUILDING_DEFS)) {
+    if (bDef.produces?.includes(unitType)) {
+      return bDef.trainCosts?.[unitType] || null;
+    }
+  }
+  return null;
+}
+
 export class Renderer {
   constructor(canvas, sprites) {
     this.canvas = canvas;
@@ -821,7 +830,10 @@ export class Renderer {
         if (!def) return '';
         const count = counts[type] || 0;
         const icon = UNIT_COUNT_ICONS[type] || def.icon;
-        return `<span class="unit-count-item" title="${def.name}"><span class="u-icon">${icon}</span><span>${count}</span></span>`;
+        const cost = getUnitTrainCost(type);
+        const costStr = cost ? `${cost.minerals || 0}m/${cost.wood || 0}w` : 'n/a';
+        const title = `${def.name} | HP ${def.hp} | DMG ${def.damage} | ARM ${def.armor} | Cost ${costStr}`;
+        return `<span class="unit-count-item" title="${title}"><span class="u-icon">${icon}</span><span>${count}</span><span class="u-stats">${def.hp}/${def.damage}</span></span>`;
       }).join('');
     }
   }
