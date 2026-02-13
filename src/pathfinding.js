@@ -70,7 +70,7 @@ function heuristic(ax, ay, bx, by) {
   return Math.max(dx, dy) + 0.414 * Math.min(dx, dy);
 }
 
-export function findPath(map, startX, startY, endX, endY, occupiedTiles = null, maxSteps = 2000) {
+export function findPath(map, startX, startY, endX, endY, occupiedTiles = null, maxSteps = 8000) {
   // If destination is not walkable, find nearest walkable tile
   if (!map.isWalkable(endX, endY)) {
     const alt = findNearestWalkable(map, endX, endY);
@@ -174,7 +174,7 @@ function findNearestWalkable(map, x, y) {
 }
 
 // Water pathfinding for naval units
-export function findPathWater(map, startX, startY, endX, endY, occupiedTiles = null, maxSteps = 2000) {
+export function findPathWater(map, startX, startY, endX, endY, occupiedTiles = null, maxSteps = 8000) {
   if (!map.isSwimmable(endX, endY)) {
     const alt = findNearestSwimmable(map, endX, endY);
     if (!alt) return [];

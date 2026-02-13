@@ -103,7 +103,7 @@ function findNearestWithPredicate(map, x, y, predicate, maxRadius) {
   return null;
 }
 
-function runPathfind(map, startX, startY, endX, endY, canTraverse, maxSearchRadius = 12) {
+function runPathfind(map, startX, startY, endX, endY, canTraverse, maxSearchRadius = 25) {
   const originalEndX = endX;
   const originalEndY = endY;
 
@@ -127,7 +127,7 @@ function runPathfind(map, startX, startY, endX, endY, canTraverse, maxSearchRadi
   open.push({ x: startX, y: startY, f: heuristic(startX, startY, endX, endY) });
 
   let steps = 0;
-  const maxSteps = 2000;
+  const maxSteps = 8000;
 
   // Track the closest explored tile to the original target (for partial path fallback)
   let bestClosestKey = -1;
@@ -194,5 +194,5 @@ export function findPath(map, startX, startY, endX, endY) {
 }
 
 export function findPathWater(map, startX, startY, endX, endY) {
-  return runPathfind(map, startX, startY, endX, endY, (x, y) => map.isSwimmable(x, y), 18);
+  return runPathfind(map, startX, startY, endX, endY, (x, y) => map.isSwimmable(x, y), 35);
 }

@@ -16,10 +16,10 @@ import { Unit, applyUnitSeparation, resetUnitIdCounter, setNextUnitIdCounter } f
 import { Building, getBuildingAtTile, resetBuildingIdCounter, setNextBuildingIdCounter } from './building.js';
 
 const SPAWN_CORNERS = {
-  [TEAM_BLUE]: { baseX: 4, baseY: 4 },
-  [TEAM_RED]: { baseX: MAP_WIDTH - 6, baseY: 4 },
-  [TEAM_GREEN]: { baseX: 4, baseY: MAP_HEIGHT - 6 },
-  [TEAM_YELLOW]: { baseX: MAP_WIDTH - 6, baseY: MAP_HEIGHT - 6 },
+  [TEAM_BLUE]: { baseX: 12, baseY: 12 },
+  [TEAM_RED]: { baseX: MAP_WIDTH - 18, baseY: 12 },
+  [TEAM_GREEN]: { baseX: 12, baseY: MAP_HEIGHT - 18 },
+  [TEAM_YELLOW]: { baseX: MAP_WIDTH - 18, baseY: MAP_HEIGHT - 18 },
 };
 
 export class GameEngine {
@@ -174,7 +174,7 @@ export class GameEngine {
 
     if (isTileOk(spawnX, spawnY)) return { x: spawnX, y: spawnY };
 
-    for (let r = 1; r <= 5; r++) {
+    for (let r = 1; r <= 8; r++) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
           const tx = spawnX + dx;

@@ -334,14 +334,27 @@ export class Renderer {
         // Subtle Team Halo/Glow to pop from background
         ctx.shadowColor = teamColor;
         ctx.shadowBlur = 4;
-        ctx.drawImage(img, ux - img.width / 2, uy - img.height / 2);
+        if (u.type === 'tank' || u.type === 'bomber' || u.type === 'battleship') {
+          // Tank/helicopter sprites are authored facing north; battleship faces east.
+          const angleOffset = (u.type === 'battleship') ? 0 : Math.PI / 2;
+          ctx.save();
+          ctx.translate(ux, uy);
+          ctx.rotate((u.facingAngle || 0) + angleOffset);
+          ctx.drawImage(img, -img.width / 2, -img.height / 2);
+          ctx.restore();
+        } else {
+          ctx.drawImage(img, ux - img.width / 2, uy - img.height / 2);
+        }
         ctx.shadowBlur = 0;
 
         // Special: Helicopter Rotors
         if (u.type === 'bomber') {
           const rotorAngle = u.animTimer * 25; // Spin speed
+          const bodyAngle = (u.facingAngle || 0) + Math.PI / 2;
           ctx.save();
-          ctx.translate(ux, uy - 4); // Center of rotor on helicopter body
+          ctx.translate(ux, uy);
+          ctx.rotate(bodyAngle);
+          ctx.translate(0, -4); // Center of rotor on helicopter body
           ctx.rotate(rotorAngle);
 
           ctx.strokeStyle = 'rgba(50, 50, 50, 0.7)';
@@ -603,7 +616,7 @@ export class Renderer {
     // Check for enemy proximity
     let enemyNearBase = false;
     const playerBuildings = buildingManager.buildings.filter(b => b.team === playerTeam);
-    const enemyUnits = unitManager.units.filter(u => u.team !== playerTeam);
+    const enemyUnits = unitManager.units.filter(u => game.isHostile(playerTeam, u.team));
     for (const b of playerBuildings) {
       for (const e of enemyUnits) {
         const d = Math.sqrt((b.x - e.x) ** 2 + (b.y - e.y) ** 2);
@@ -721,6 +734,21 @@ export class Renderer {
     let infoHtml = '';
     let actionsHtml = '';
 
+    if (game.ended) {
+      const won = game.winnerTeam === playerTeam;
+      const label = won ? 'Victory' : 'Defeat';
+      const color = won ? '#4f4' : '#f66';
+      infoHtml = `<h3 style="color:${color}">${label}</h3><p>${won ? 'All enemy recovery options are gone.' : 'Your HQ and workers are gone.'}</p><p style="color:#888">Start a new game or load a save from the menu.</p>`;
+      hudInfo.innerHTML = infoHtml;
+      hudActions.innerHTML = '';
+      const resEl = document.getElementById('resources');
+      const diplomacyLabel = game.alliedAiMode ? 'AI Allied' : 'AI Hostile';
+      const combatLabel = game.combatFrozen ? 'Combat Frozen' : 'Combat Live';
+      const modeParts = `${game.mode === 'multiplayer' ? 'Multiplayer' : 'Single Player'} | ${diplomacyLabel} | ${combatLabel}`;
+      resEl.innerHTML = `<div class="res-item"><div class="res-icon" style="background:#44ccff; box-shadow:0 0 5px #44ccff"></div><span>${res.minerals}</span></div><div class="res-item"><div class="res-icon" style="background:#8B6914; box-shadow:0 0 5px #8B6914"></div><span>${res.wood}</span></div><div class="res-item"><span style="color:${color}; font-size:11px; text-transform:uppercase; letter-spacing:0.5px">${label}</span></div><div class="res-item"><span style="color:#72d5ff; font-size:11px; text-transform:uppercase; letter-spacing:0.5px">${modeParts}</span></div>`;
+      return;
+    }
+
     if (game.buildMode) {
       const def = BUILDING_DEFS[game.buildMode];
       infoHtml = `<h3>Place ${def.name}</h3><p>Cost: <span style="color:#ffd740">${this._formatCost(def.cost)}</span></p><p>Click on the map to place building.</p><p>Right-click or ESC to cancel.</p>`;
@@ -774,7 +802,7 @@ export class Renderer {
       }
     } else if (selected.length === 0) {
       const pCount = game.unitManager.getPlayerUnits(playerTeam).length;
-      const eCount = game.unitManager.units.filter(u => u.team !== playerTeam).length;
+      const eCount = game.unitManager.units.filter(u => game.isHostile(playerTeam, u.team)).length;
       infoHtml = `<h3>Global Command</h3><p>Tactical Overview:</p><p>• Friendly Forces: ${pCount}</p><p>• Enemy Presence: ${eCount}</p><p style="color:#555; margin-top:8px; font-style:italic">Select units or structures to issue commands.</p>`;
     } else {
       const typeCounts = {};
@@ -814,7 +842,9 @@ export class Renderer {
       });
     });
     const resEl = document.getElementById('resources');
-    const modeParts = difficultyLabel ? `${modeLabel} | ${difficultyLabel}` : modeLabel;
+    const diplomacyLabel = game.alliedAiMode ? 'AI Allied' : 'AI Hostile';
+    const combatLabel = game.combatFrozen ? 'Combat Frozen' : 'Combat Live';
+    const modeParts = difficultyLabel ? `${modeLabel} | ${difficultyLabel} | ${diplomacyLabel} | ${combatLabel}` : `${modeLabel} | ${diplomacyLabel} | ${combatLabel}`;
     resEl.innerHTML = `<div class="res-item"><div class="res-icon" style="background:#44ccff; box-shadow:0 0 5px #44ccff"></div><span>${res.minerals}</span></div><div class="res-item"><div class="res-icon" style="background:#8B6914; box-shadow:0 0 5px #8B6914"></div><span>${res.wood}</span></div><div class="res-item"><span style="color:#72d5ff; font-size:11px; text-transform:uppercase; letter-spacing:0.5px">${modeParts}</span></div>`;
 
     const unitCountsEl = document.getElementById('unit-counts');

@@ -20,6 +20,8 @@ export class Game {
     this.difficulty = difficulty;
     this.mode = 'singleplayer';
     this.debugShowAll = !!options.debugShowAll;
+    this.alliedAiMode = !!options.alliedAiMode;
+    this.combatFrozen = !!options.combatFrozen;
     this.enemyTeams = this._enemyTeamsForDifficulty(difficulty);
 
     // Dual resource system: minerals + wood (all 4 teams)
@@ -41,8 +43,10 @@ export class Game {
     this.buildingManager = new BuildingManager();
     this.renderer = new Renderer(canvas, this.sprites);
 
-    // AI opponents by difficulty (easy = 1 enemy, normal = 2, hard = 3)
+    // Always spawn all AI teams in single-player; difficulty only changes behavior.
     this.ais = this.enemyTeams.map(t => new SimpleAI(t, difficulty));
+
+    this._configureAiBehaviors(difficulty);
 
     // Apply hard-mode resource bonus to AI
     for (const ai of this.ais) {
@@ -59,7 +63,7 @@ export class Game {
     this._spawnStartingSetup();
 
     // Center camera on player start
-    this.camera.centerOn(5 * TILE_SIZE, 5 * TILE_SIZE);
+    this.camera.centerOn(15 * TILE_SIZE, 15 * TILE_SIZE);
 
     // Audio
     initAudio();
@@ -71,6 +75,9 @@ export class Game {
     this.paused = false;
     this.lastTime = 0;
     this.gameTime = 0;
+    this.ended = false;
+    this.winnerTeam = null;
+    this.defeatedTeams = new Set();
 
     // Fog of war (single-player perspective: TEAM_BLUE)
     this.fogEnabled = !this.debugShowAll;
@@ -105,10 +112,10 @@ export class Game {
 
   _spawnStartingSetup() {
     const corners = [
-      { team: TEAM_BLUE, baseX: 4, baseY: 4 },
-      { team: TEAM_RED, baseX: MAP_WIDTH - 6, baseY: 4 },
-      { team: TEAM_GREEN, baseX: 4, baseY: MAP_HEIGHT - 6 },
-      { team: TEAM_YELLOW, baseX: MAP_WIDTH - 6, baseY: MAP_HEIGHT - 6 },
+      { team: TEAM_BLUE, baseX: 12, baseY: 12 },
+      { team: TEAM_RED, baseX: MAP_WIDTH - 18, baseY: 12 },
+      { team: TEAM_GREEN, baseX: 12, baseY: MAP_HEIGHT - 18 },
+      { team: TEAM_YELLOW, baseX: MAP_WIDTH - 18, baseY: MAP_HEIGHT - 18 },
     ];
     const activeTeams = new Set([TEAM_BLUE, ...this.enemyTeams]);
 
@@ -160,8 +167,13 @@ export class Game {
   }
 
   _update(dt) {
+    if (this.ended) return;
+
+    // Tick down thaw cooldown (used to stagger AI after unfreezing combat)
+    if (this._thawCooldown > 0) this._thawCooldown -= dt;
+
     // Update units
-    const deaths = this.unitManager.update(dt, this.map, this.buildingManager.buildings);
+    const deaths = this.unitManager.update(dt, this.map, this.buildingManager.buildings, (a, b) => this.isHostile(a, b));
 
     // SFX and Particles for deaths
     for (const d of deaths) {
@@ -205,7 +217,7 @@ export class Game {
     }
 
     // Update buildings - spawn trained units, tower attacks
-    const { produced, destroyed } = this.buildingManager.update(dt, this.unitManager.units);
+    const { produced, destroyed } = this.buildingManager.update(dt, this.unitManager.units, (a, b) => this.isHostile(a, b));
 
     // Building destruction effects
     for (const b of destroyed) {
@@ -266,6 +278,8 @@ export class Game {
       ai.update(dt, this);
     }
 
+    this._checkBaseWinCondition();
+
     this.gameTime += dt;
 
     // Camera
@@ -288,6 +302,8 @@ export class Game {
   }
 
   _handleInput() {
+    if (this.ended) return;
+
     // Check minimap click first
     const peekLeft = this.input.leftClick;
     if (peekLeft && !peekLeft.box) {
@@ -390,12 +406,12 @@ export class Game {
         const canSeeUnit = targetUnit ? this.isWorldVisible(targetUnit.x, targetUnit.y) : false;
         const canSeeBuilding = targetBuilding ? this.isWorldVisible(targetBuilding.x, targetBuilding.y) : false;
 
-        if (targetUnit && targetUnit.team !== TEAM_BLUE && canSeeUnit) {
+        if (targetUnit && this.isHostile(TEAM_BLUE, targetUnit.team) && canSeeUnit) {
           for (const unit of selected) {
             unit.attackTarget(targetUnit, this.map);
           }
           sfxMove();
-        } else if (targetBuilding && targetBuilding.team !== TEAM_BLUE && canSeeBuilding) {
+        } else if (targetBuilding && this.isHostile(TEAM_BLUE, targetBuilding.team) && canSeeBuilding) {
           for (const unit of selected) {
             unit.attackBuilding(targetBuilding, this.map);
           }
@@ -561,16 +577,182 @@ export class Game {
   }
 
   setDifficulty(difficulty) {
+    if (this.ended) return;
     this.difficulty = difficulty;
     for (const ai of this.ais) {
       ai.setDifficulty(difficulty);
     }
+    this._configureAiBehaviors(difficulty);
+  }
+
+  setAlliedAiMode(enabled) {
+    if (this.ended) return;
+    this.alliedAiMode = !!enabled;
+    this._sanitizeCombatTargets();
+  }
+
+  setCombatFrozen(enabled) {
+    if (this.ended) return;
+    const wasFrozen = this.combatFrozen;
+    this.combatFrozen = !!enabled;
+    this._sanitizeCombatTargets();
+
+    // When unfreezing, de-stack overlapping units and stagger combat activation
+    if (wasFrozen && !this.combatFrozen) {
+      this._thawCooldown = 3.0;
+      this._deStackUnits();
+      for (const u of this.unitManager.units) {
+        if (u.type === 'worker') continue;
+        u.commandLockTimer = Math.random() * 3.0;
+        u.path = [];
+      }
+    }
+  }
+
+  // Spread overlapping units to unique tiles so they don't fight over the same space
+  _deStackUnits() {
+    const occupied = new Set();
+
+    // Mark building tiles as occupied
+    for (const b of this.buildingManager.buildings) {
+      if (b.hp <= 0) continue;
+      const bx = b.tileX;
+      const by = b.tileY;
+      for (let dy = 0; dy < b.sizeTiles; dy++) {
+        for (let dx = 0; dx < b.sizeTiles; dx++) {
+          occupied.add(`${bx + dx},${by + dy}`);
+        }
+      }
+    }
+
+    for (const u of this.unitManager.units) {
+      if (u.flying) continue;
+      const key = `${u.tileX},${u.tileY}`;
+      if (!occupied.has(key)) {
+        occupied.add(key);
+        continue;
+      }
+      // Unit is overlapping - find nearest free walkable tile
+      for (let r = 1; r <= 15; r++) {
+        let found = false;
+        for (let dy = -r; dy <= r && !found; dy++) {
+          for (let dx = -r; dx <= r && !found; dx++) {
+            if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+            const nx = u.tileX + dx;
+            const ny = u.tileY + dy;
+            const nkey = `${nx},${ny}`;
+            if (occupied.has(nkey)) continue;
+            const walkable = u.naval
+              ? this.map.isSwimmable(nx, ny)
+              : this.map.isWalkable(nx, ny);
+            if (walkable) {
+              u.x = nx * TILE_SIZE + TILE_SIZE / 2;
+              u.y = ny * TILE_SIZE + TILE_SIZE / 2;
+              u.tileX = nx;
+              u.tileY = ny;
+              occupied.add(nkey);
+              found = true;
+            }
+          }
+        }
+        if (found) break;
+      }
+    }
+  }
+
+  isHostile(teamA, teamB) {
+    if (this.combatFrozen) return false;
+    if (teamA === teamB) return false;
+    if (this.alliedAiMode && teamA !== TEAM_BLUE && teamB !== TEAM_BLUE) return false;
+    return true;
+  }
+
+  _sanitizeCombatTargets() {
+    for (const u of this.unitManager.units) {
+      if (u.target && !this.isHostile(u.team, u.target.team)) {
+        u.target = null;
+      }
+      if (u.targetBld && !this.isHostile(u.team, u.targetBld.team)) {
+        u.targetBld = null;
+      }
+      if ((u.state === 'attacking' && !u.target) || (u.state === 'attackingBuilding' && !u.targetBld)) {
+        u.state = 'idle';
+      }
+    }
+    for (const b of this.buildingManager.buildings) {
+      if (b.attackTarget && !this.isHostile(b.team, b.attackTarget.team)) {
+        b.attackTarget = null;
+      }
+    }
   }
 
   _enemyTeamsForDifficulty(difficulty) {
-    if (difficulty === 'easy') return [TEAM_RED];
-    if (difficulty === 'normal') return [TEAM_RED, TEAM_GREEN];
     return [TEAM_RED, TEAM_GREEN, TEAM_YELLOW];
+  }
+
+  _configureAiBehaviors(difficulty) {
+    // Make all AI use copycat behavior so they are consistently competitive.
+    let multipliers = [1.0, 1.0, 1.05];
+    if (difficulty === 'normal') {
+      multipliers = [1.05, 1.1, 1.15];
+    } else if (difficulty === 'hard') {
+      multipliers = [1.15, 1.22, 1.3];
+    }
+    for (let i = 0; i < this.ais.length; i++) {
+      const ai = this.ais[i];
+      ai.copycatTarget = TEAM_BLUE;
+      ai.copycatMultiplier = multipliers[i] || multipliers[multipliers.length - 1];
+    }
+  }
+
+  _teamHasBase(team) {
+    return this.buildingManager.buildings.some((b) => b.team === team && b.type === 'base' && b.hp > 0);
+  }
+
+  _teamHasWorkers(team) {
+    return this.unitManager.units.some((u) => u.team === team && u.type === 'worker' && u.hp > 0);
+  }
+
+  _eliminateTeam(team) {
+    this.unitManager.units = this.unitManager.units.filter((u) => u.team !== team);
+    this.buildingManager.buildings = this.buildingManager.buildings.filter((b) => b.team !== team);
+    this.ais = this.ais.filter((ai) => ai.team !== team);
+    this.defeatedTeams.add(team);
+    this._sanitizeCombatTargets();
+  }
+
+  _checkBaseWinCondition() {
+    const teams = [TEAM_BLUE, ...this.enemyTeams];
+    for (const team of teams) {
+      const noBase = !this._teamHasBase(team);
+      const noWorkers = !this._teamHasWorkers(team);
+      if (!this.defeatedTeams.has(team) && noBase && noWorkers) {
+        this._eliminateTeam(team);
+      }
+    }
+
+    const aliveTeams = teams.filter((team) => !this.defeatedTeams.has(team));
+    const aliveAiTeams = this.enemyTeams.filter((team) => !this.defeatedTeams.has(team));
+
+    if (this.defeatedTeams.has(TEAM_BLUE)) {
+      this.ended = true;
+      this.winnerTeam = aliveAiTeams.length === 1 ? aliveAiTeams[0] : null;
+      this.paused = true;
+      return;
+    }
+
+    if (aliveAiTeams.length === 0 && !this.defeatedTeams.has(TEAM_BLUE)) {
+      this.ended = true;
+      this.winnerTeam = TEAM_BLUE;
+      this.paused = true;
+      return;
+    }
+
+    if (aliveTeams.length <= 1) {
+      this.ended = true;
+      this.winnerTeam = aliveTeams.length === 1 ? aliveTeams[0] : null;
+      this.paused = true;
+    }
   }
 
   resize(w, h) {
@@ -622,11 +804,16 @@ export class Game {
   saveToSlot(slotName) {
     try {
       const save = {
-        version: 1,
+        version: 2,
         name: slotName,
         timestamp: Date.now(),
         seed: this.map.seed,
         difficulty: this.difficulty,
+        alliedAiMode: this.alliedAiMode,
+        combatFrozen: this.combatFrozen,
+        ended: this.ended,
+        winnerTeam: this.winnerTeam,
+        defeatedTeams: Array.from(this.defeatedTeams),
         gameTime: this.gameTime,
         resources: this.resources,
         camera: { x: this.camera.x, y: this.camera.y, zoom: this.camera.zoom },
@@ -704,7 +891,7 @@ export class Game {
       const raw = localStorage.getItem('microRts_' + slotName);
       if (!raw) return false;
       const save = JSON.parse(raw);
-      if (save.version !== 1) return false;
+      if (save.version !== 1 && save.version !== 2) return false;
 
       // Restore map from seed, then overwrite tiles and resource amounts
       this.map = new GameMap(save.seed);
@@ -729,7 +916,13 @@ export class Game {
 
       // Restore difficulty
       this.difficulty = save.difficulty;
+      this.alliedAiMode = !!save.alliedAiMode;
+      this.combatFrozen = !!save.combatFrozen;
+      this.ended = !!save.ended;
+      this.winnerTeam = save.winnerTeam ?? null;
+      this.defeatedTeams = new Set(Array.isArray(save.defeatedTeams) ? save.defeatedTeams : []);
       for (const ai of this.ais) ai.setDifficulty(save.difficulty);
+      this._configureAiBehaviors(save.difficulty);
 
       // Restore camera
       this.camera.x = save.camera.x;
@@ -800,6 +993,7 @@ export class Game {
       }
 
       this.gameTime = save.gameTime || 0;
+      this._sanitizeCombatTargets();
       this.renderer.minimapDirty = true;
       return true;
     } catch (e) {
@@ -852,20 +1046,20 @@ export class Game {
     this.fogVisible.fill(0);
 
     const unitVision = {
-      worker: 5,
-      soldier: 6,
-      tank: 7,
-      rocket: 7,
-      bomber: 8,
-      battleship: 9,
+      worker: 8,
+      soldier: 10,
+      tank: 11,
+      rocket: 11,
+      bomber: 13,
+      battleship: 14,
     };
 
     const buildingVision = {
-      base: 8,
-      barracks: 7,
-      factory: 7,
-      dock: 8,
-      tower: 9,
+      base: 12,
+      barracks: 10,
+      factory: 10,
+      dock: 12,
+      tower: 14,
     };
 
     for (const u of this.unitManager.units) {

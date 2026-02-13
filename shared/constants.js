@@ -1,6 +1,6 @@
 export const TILE_SIZE = 32;
-export const MAP_WIDTH = 64;
-export const MAP_HEIGHT = 64;
+export const MAP_WIDTH = 200;
+export const MAP_HEIGHT = 200;
 
 export const TILE_GRASS = 0;
 export const TILE_WATER = 1;
@@ -15,7 +15,7 @@ export const TEAM_GREEN = 2;
 export const TEAM_YELLOW = 3;
 export const ALL_TEAMS = [TEAM_BLUE, TEAM_RED, TEAM_GREEN, TEAM_YELLOW];
 
-export const MAX_UNITS_TOTAL = 100;
+export const MAX_UNITS_TOTAL = 300;
 
 export const UNIT_DEFS = {
   worker: { name: 'Worker', icon: 'W', hotkey: 'w', hp: 40, damage: 5, armor: 0, speed: 80, attackRange: 1.5, attackSpeed: 1.5, flying: false, naval: false },

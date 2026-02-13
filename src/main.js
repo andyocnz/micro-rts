@@ -14,6 +14,8 @@ let game = null;
 let network = null;
 let currentMode = null; // 'single' | 'multi' | null
 let selectedDifficulty = 'normal';
+let selectedAllyMode = 'off';
+let selectedCombatMode = 'live';
 let selectedTheme = 'verdant';
 
 // Multiplayer state
@@ -78,6 +80,49 @@ function getPlayerIcon() {
   return el ? el.value : '⚔️';
 }
 
+function updateDifficultyButtons(selector, difficulty) {
+  document.querySelectorAll(selector).forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.diff === difficulty);
+  });
+}
+
+function setSelectedDifficulty(difficulty, applyToRunningSingle = false) {
+  selectedDifficulty = difficulty;
+  updateDifficultyButtons('.menu-diff-btn', difficulty);
+  updateDifficultyButtons('.ingame-diff-btn', difficulty);
+  if (applyToRunningSingle && currentMode === 'single' && game instanceof Game) {
+    game.setDifficulty(difficulty);
+  }
+}
+
+function updateAllyButtons(selector, allyMode) {
+  document.querySelectorAll(selector).forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.ally === allyMode);
+  });
+}
+
+function setSelectedAllyMode(allyMode, applyToRunningSingle = false) {
+  selectedAllyMode = allyMode === 'on' ? 'on' : 'off';
+  updateAllyButtons('.ingame-ally-btn', selectedAllyMode);
+  if (applyToRunningSingle && currentMode === 'single' && game instanceof Game) {
+    game.setAlliedAiMode(selectedAllyMode === 'on');
+  }
+}
+
+function updateCombatButtons(combatMode) {
+  document.querySelectorAll('.ingame-combat-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.combat === combatMode);
+  });
+}
+
+function setSelectedCombatMode(combatMode, applyToRunningSingle = false) {
+  selectedCombatMode = combatMode === 'frozen' ? 'frozen' : 'live';
+  updateCombatButtons(selectedCombatMode);
+  if (applyToRunningSingle && currentMode === 'single' && game instanceof Game) {
+    game.setCombatFrozen(selectedCombatMode === 'frozen');
+  }
+}
+
 function sendPlayerInfo() {
   if (!network) return;
   network.send('SET_PLAYER_INFO', { name: getPlayerName(), icon: getPlayerIcon() });
@@ -131,6 +176,9 @@ function stopGame() {
   updatePlayerList([]);
   updateSinglePauseUi();
   updateResumeUi();
+  setSelectedDifficulty(selectedDifficulty);
+  setSelectedAllyMode(selectedAllyMode);
+  setSelectedCombatMode(selectedCombatMode);
 }
 
 // --- Single Player ---
@@ -138,14 +186,25 @@ function stopGame() {
 function startSinglePlayer(difficulty, loadSlot) {
   stopGame();
   currentMode = 'single';
-  selectedDifficulty = difficulty;
+  setSelectedDifficulty(difficulty);
+  if (!loadSlot) {
+    setSelectedAllyMode('off');
+    setSelectedCombatMode('live');
+  }
 
-  game = new Game(canvas, difficulty, { debugShowAll: DEBUG_REVEAL });
+  game = new Game(canvas, difficulty, {
+    debugShowAll: DEBUG_REVEAL,
+    alliedAiMode: selectedAllyMode === 'on',
+    combatFrozen: selectedCombatMode === 'frozen',
+  });
   game.switchTheme(selectedTheme);
   window.game = game;
 
   if (loadSlot) {
     game.loadFromSlot(loadSlot);
+    if (game.difficulty) setSelectedDifficulty(game.difficulty);
+    setSelectedAllyMode(game.alliedAiMode ? 'on' : 'off');
+    setSelectedCombatMode(game.combatFrozen ? 'frozen' : 'live');
   }
 
   hideMenu();
@@ -508,6 +567,9 @@ function renderSaveList() {
       } else {
         if (game && game.loadFromSlot) {
           game.loadFromSlot(name);
+          if (game.difficulty) setSelectedDifficulty(game.difficulty);
+          setSelectedAllyMode(game.alliedAiMode ? 'on' : 'off');
+          setSelectedCombatMode(game.combatFrozen ? 'frozen' : 'live');
         }
         closeModal();
       }
@@ -551,11 +613,30 @@ function init() {
   });
 
   // --- Difficulty buttons ---
-  document.querySelectorAll('.diff-btn').forEach(btn => {
+  document.querySelectorAll('.menu-diff-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      selectedDifficulty = btn.dataset.diff;
+      setSelectedDifficulty(btn.dataset.diff);
+    });
+  });
+
+  document.querySelectorAll('.ingame-diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (currentMode !== 'single' || !(game instanceof Game)) return;
+      setSelectedDifficulty(btn.dataset.diff, true);
+    });
+  });
+
+  document.querySelectorAll('.ingame-ally-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (currentMode !== 'single' || !(game instanceof Game)) return;
+      setSelectedAllyMode(btn.dataset.ally, true);
+    });
+  });
+
+  document.querySelectorAll('.ingame-combat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (currentMode !== 'single' || !(game instanceof Game)) return;
+      setSelectedCombatMode(btn.dataset.combat, true);
     });
   });
 
@@ -707,6 +788,9 @@ function init() {
   updatePlayerList([]);
   updateSinglePauseUi();
   updateResumeUi();
+  setSelectedDifficulty(selectedDifficulty);
+  setSelectedAllyMode(selectedAllyMode);
+  setSelectedCombatMode(selectedCombatMode);
 }
 
 if (document.readyState === 'loading') {

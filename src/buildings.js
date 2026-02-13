@@ -219,12 +219,12 @@ export class BuildingManager {
     return building;
   }
 
-  update(dt, allUnits) {
+  update(dt, allUnits, isHostile = (a, b) => a !== b) {
     const produced = [];
     const destroyed = [];
     for (const b of this.buildings) {
       // Find enemy units for tower targeting
-      const enemies = allUnits ? allUnits.filter(u => u.team !== b.team) : [];
+      const enemies = allUnits ? allUnits.filter(u => isHostile(b.team, u.team)) : [];
       const result = b.update(dt, enemies);
       if (result) produced.push(result);
     }

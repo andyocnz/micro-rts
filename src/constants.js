@@ -1,10 +1,10 @@
 export const TILE_SIZE = 32;
-export const MAP_WIDTH = 64;
-export const MAP_HEIGHT = 64;
+export const MAP_WIDTH = 200;
+export const MAP_HEIGHT = 200;
 export const WORLD_W = MAP_WIDTH * TILE_SIZE;
 export const WORLD_H = MAP_HEIGHT * TILE_SIZE;
 
-export const CAMERA_SPEED = 400; // pixels per second
+export const CAMERA_SPEED = 800; // pixels per second
 export const EDGE_SCROLL_ZONE = 20;
 
 export const MINIMAP_SIZE = 180;

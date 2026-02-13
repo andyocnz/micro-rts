@@ -1,6 +1,6 @@
 import { WORLD_W, WORLD_H, CAMERA_SPEED, EDGE_SCROLL_ZONE, TILE_SIZE } from './constants.js';
 
-const MIN_ZOOM = 0.5;
+const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 2.0;
 
 export class Camera {
