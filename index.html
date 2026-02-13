@@ -31,6 +31,339 @@
       background: #1a1a1e;
     }
 
+    /* ===== MAIN MENU ===== */
+    #main-menu {
+      position: fixed;
+      inset: 0;
+      z-index: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(5, 5, 10, 0.92);
+      backdrop-filter: blur(8px);
+    }
+
+    #main-menu.hidden { display: none; }
+
+    .menu-container {
+      width: 480px;
+      max-height: 90vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .menu-title {
+      text-align: center;
+      color: #72d5ff;
+      font-size: 32px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 4px;
+      text-shadow: 0 0 20px rgba(114, 213, 255, 0.5);
+      margin-bottom: 4px;
+    }
+
+    .menu-subtitle {
+      text-align: center;
+      color: #666;
+      font-size: 12px;
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+
+    .menu-section {
+      background: rgba(20, 20, 28, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .menu-section h3 {
+      color: #ccc;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+
+    .menu-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .menu-row:last-child { margin-bottom: 0; }
+
+    .menu-btn {
+      flex: 1;
+      padding: 10px 16px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.05);
+      color: #ddd;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .menu-btn:hover {
+      background: rgba(114, 213, 255, 0.12);
+      border-color: #72d5ff;
+      color: #fff;
+    }
+
+    .menu-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .menu-btn.primary {
+      background: rgba(40, 80, 60, 0.6);
+      border-color: #4a8;
+    }
+
+    .menu-btn.primary:hover {
+      background: rgba(60, 120, 80, 0.7);
+      border-color: #6c6;
+    }
+
+    .menu-input {
+      flex: 1;
+      padding: 8px 10px;
+      background: #0e0e14;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 13px;
+      text-transform: uppercase;
+      outline: none;
+    }
+
+    .menu-input:focus { border-color: #72d5ff; }
+
+    .menu-info {
+      color: #888;
+      font-size: 11px;
+      padding: 4px 0;
+    }
+
+    .menu-theme-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      margin-top: 4px;
+    }
+
+    .menu-theme-label {
+      color: #666;
+      font-size: 11px;
+      margin-right: 4px;
+    }
+
+    /* Reuse existing diff-btn and theme-btn styles */
+    .diff-btn {
+      padding: 6px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #888;
+      font-size: 12px;
+      font-weight: bold;
+      background: transparent;
+      transition: all 0.2s;
+    }
+
+    .diff-btn:hover { color: #fff; border-color: #72d5ff; }
+    .diff-btn.active { color: #fff; border-color: #fff; background: rgba(255, 255, 255, 0.1); }
+    .diff-btn[data-diff="easy"].active { color: #4f4; border-color: #4f4; }
+    .diff-btn[data-diff="normal"].active { color: #ff0; border-color: #ff0; }
+    .diff-btn[data-diff="hard"].active { color: #f44; border-color: #f44; }
+
+    .theme-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      transition: all 0.2s;
+    }
+
+    .theme-btn:hover { transform: scale(1.1); border-color: #72d5ff; }
+    .theme-btn.active { border-color: #fff; box-shadow: 0 0 8px #fff; }
+
+    /* Multiplayer tabs */
+    .mp-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 10px;
+    }
+
+    .mp-tab {
+      flex: 1;
+      padding: 8px 0;
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-bottom: none;
+      color: #666;
+      font-size: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .mp-tab:first-child { border-radius: 6px 0 0 0; }
+    .mp-tab:last-child { border-radius: 0 6px 0 0; }
+
+    .mp-tab.active {
+      background: rgba(114, 213, 255, 0.1);
+      color: #72d5ff;
+      border-color: rgba(114, 213, 255, 0.3);
+    }
+
+    .mp-tab:hover:not(.active) { color: #aaa; }
+
+    .mp-tab-content {
+      display: none;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 0 0 6px 6px;
+      padding: 10px;
+      margin-top: -1px;
+    }
+
+    .mp-tab-content.active { display: block; }
+
+    /* Room code display with copy */
+    .room-code-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .room-code-value {
+      font-size: 22px;
+      font-weight: bold;
+      color: #72d5ff;
+      letter-spacing: 4px;
+      font-family: 'Consolas', 'Courier New', monospace;
+    }
+
+    .copy-btn {
+      padding: 4px 10px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      color: #888;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover { color: #fff; border-color: #72d5ff; }
+    .copy-btn.copied { color: #4f4; border-color: #4f4; }
+
+    /* Player slots */
+    #player-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      color: #9aa;
+      margin-top: 6px;
+    }
+
+    .player-slot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      padding: 6px 8px;
+      font-size: 12px;
+    }
+
+    .player-slot .slot-label { font-weight: bold; color: #aaa; min-width: 50px; }
+    .player-slot .slot-status { flex: 1; margin-left: 8px; }
+
+    .ai-select {
+      padding: 3px 6px;
+      background: #0e0e14;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+      color: #ccc;
+      font-size: 11px;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .ai-select:focus { border-color: #72d5ff; }
+
+    /* Player identity row */
+    .player-identity {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .icon-select {
+      width: 42px;
+      padding: 4px;
+      background: #0e0e14;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      text-align: center;
+      outline: none;
+    }
+
+    .icon-select:focus { border-color: #72d5ff; }
+
+    .name-input {
+      flex: 1;
+      padding: 6px 10px;
+      background: #0e0e14;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .name-input:focus { border-color: #72d5ff; }
+
+    .player-slot .slot-icon { font-size: 14px; margin-right: 4px; }
+
+    #back-to-menu {
+      position: absolute;
+      top: 58px;
+      left: 12px;
+      padding: 6px 14px;
+      background: rgba(20, 20, 25, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #888;
+      font-size: 11px;
+      font-weight: bold;
+      border-radius: 4px;
+      cursor: pointer;
+      z-index: 100;
+      display: none;
+    }
+
+    #back-to-menu:hover { color: #fff; border-color: #72d5ff; }
+
+    /* ===== GAME HUD ===== */
+    #game-ui { display: none; }
+    #game-ui.active { display: block; }
+
     #hud {
       position: absolute;
       bottom: 20px;
@@ -69,11 +402,7 @@
       text-shadow: 0 0 8px rgba(114, 213, 255, 0.4);
     }
 
-    #hud-info p {
-      margin: 2px 0;
-      color: #b0b0b8;
-      font-size: 12px;
-    }
+    #hud-info p { margin: 2px 0; color: #b0b0b8; font-size: 12px; }
 
     #hud-actions {
       display: flex;
@@ -111,22 +440,9 @@
       box-shadow: 0 0 12px rgba(114, 213, 255, 0.3);
     }
 
-    .action-btn:active:not(.disabled) {
-      transform: translateY(0);
-      background: #202024;
-    }
-
-    .action-btn .btn-icon {
-      font-size: 20px;
-      margin-bottom: 1px;
-      filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.5));
-    }
-
-    .action-btn .btn-label {
-      font-size: 9px;
-      font-weight: bold;
-      color: #ccc;
-    }
+    .action-btn:active:not(.disabled) { transform: translateY(0); background: #202024; }
+    .action-btn .btn-icon { font-size: 20px; margin-bottom: 1px; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.5)); }
+    .action-btn .btn-label { font-size: 9px; font-weight: bold; color: #ccc; }
 
     .action-btn .btn-cost {
       position: absolute;
@@ -150,11 +466,7 @@
       font-weight: bold;
     }
 
-    .action-btn.disabled {
-      opacity: 0.3;
-      filter: grayscale(1);
-      cursor: not-allowed;
-    }
+    .action-btn.disabled { opacity: 0.3; filter: grayscale(1); cursor: not-allowed; }
 
     #resources {
       position: absolute;
@@ -172,87 +484,42 @@
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
     }
 
-    .res-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .res-icon {
-      width: 14px;
-      height: 14px;
-      border-radius: 2px;
-    }
-
-    #theme-selector {
+    #unit-counts {
       position: absolute;
       top: 12px;
-      left: 200px;
+      right: 12px;
       display: flex;
-      gap: 8px;
-      background: rgba(0, 0, 0, 0.4);
-      padding: 6px;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .theme-btn {
-      width: 24px;
-      height: 24px;
-      border-radius: 4px;
-      cursor: pointer;
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      transition: all 0.2s;
-    }
-
-    .theme-btn:hover {
-      transform: scale(1.1);
-      border-color: #72d5ff;
-    }
-
-    .theme-btn.active {
-      border-color: #fff;
-      box-shadow: 0 0 8px #fff;
-    }
-
-    #difficulty-selector {
-      position: absolute;
-      top: 50px;
-      left: 12px;
-      display: flex;
-      gap: 4px;
-      background: rgba(0, 0, 0, 0.4);
-      padding: 4px;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      max-width: 420px;
+      background: rgba(20, 20, 25, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 6px 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.28);
     }
 
-    .diff-btn {
-      padding: 4px 10px;
+    .unit-count-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 36px;
+      padding: 2px 5px;
       border-radius: 4px;
-      cursor: pointer;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: #888;
-      font-size: 11px;
-      font-weight: bold;
-      background: transparent;
-      transition: all 0.2s;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #ddd;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
     }
 
-    .diff-btn:hover {
-      color: #fff;
-      border-color: #72d5ff;
+    .unit-count-item .u-icon {
+      font-size: 12px;
+      color: #72d5ff;
     }
-
-    .diff-btn.active {
-      color: #fff;
-      border-color: #fff;
-      background: rgba(255, 255, 255, 0.1);
-    }
-
-    .diff-btn[data-diff="easy"].active { color: #4f4; border-color: #4f4; }
-    .diff-btn[data-diff="normal"].active { color: #ff0; border-color: #ff0; }
-    .diff-btn[data-diff="hard"].active { color: #f44; border-color: #f44; }
 
     #save-indicator {
       position: absolute;
@@ -275,9 +542,11 @@
       top: 12px;
       left: 50%;
       transform: translateX(-50%);
-      display: flex;
+      display: none;
       gap: 6px;
     }
+
+    #save-load-bar.active { display: flex; }
 
     .sl-btn {
       padding: 6px 14px;
@@ -307,9 +576,7 @@
       justify-content: center;
     }
 
-    #save-modal-overlay.open {
-      display: flex;
-    }
+    #save-modal-overlay.open { display: flex; }
 
     #save-modal {
       background: #1a1a22;
@@ -330,11 +597,7 @@
       letter-spacing: 1px;
     }
 
-    #save-name-row {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 14px;
-    }
+    #save-name-row { display: flex; gap: 8px; margin-bottom: 14px; }
 
     #save-name-input {
       flex: 1;
@@ -347,9 +610,7 @@
       outline: none;
     }
 
-    #save-name-input:focus {
-      border-color: #72d5ff;
-    }
+    #save-name-input:focus { border-color: #72d5ff; }
 
     #save-confirm-btn {
       padding: 8px 18px;
@@ -362,15 +623,9 @@
       font-size: 13px;
     }
 
-    #save-confirm-btn:hover {
-      background: #3a7a4a;
-    }
+    #save-confirm-btn:hover { background: #3a7a4a; }
 
-    #save-list {
-      max-height: 260px;
-      overflow-y: auto;
-      margin-bottom: 14px;
-    }
+    #save-list { max-height: 260px; overflow-y: auto; margin-bottom: 14px; }
 
     .save-entry {
       display: flex;
@@ -385,31 +640,11 @@
       transition: background 0.15s;
     }
 
-    .save-entry:hover {
-      background: rgba(114,213,255,0.1);
-      border-color: rgba(114,213,255,0.3);
-    }
-
-    .save-entry-info {
-      flex: 1;
-    }
-
-    .save-entry-name {
-      font-weight: bold;
-      font-size: 13px;
-      color: #fff;
-    }
-
-    .save-entry-detail {
-      font-size: 11px;
-      color: #888;
-      margin-top: 2px;
-    }
-
-    .save-entry-actions {
-      display: flex;
-      gap: 6px;
-    }
+    .save-entry:hover { background: rgba(114,213,255,0.1); border-color: rgba(114,213,255,0.3); }
+    .save-entry-info { flex: 1; }
+    .save-entry-name { font-weight: bold; font-size: 13px; color: #fff; }
+    .save-entry-detail { font-size: 11px; color: #888; margin-top: 2px; }
+    .save-entry-actions { display: flex; gap: 6px; }
 
     .save-entry-actions button {
       padding: 4px 10px;
@@ -421,22 +656,9 @@
       cursor: pointer;
     }
 
-    .save-entry-actions button:hover {
-      color: #fff;
-      border-color: #72d5ff;
-    }
-
-    .save-entry-actions .del-btn:hover {
-      color: #f55;
-      border-color: #f55;
-    }
-
-    .save-empty {
-      color: #666;
-      font-size: 12px;
-      text-align: center;
-      padding: 16px;
-    }
+    .save-entry-actions button:hover { color: #fff; border-color: #72d5ff; }
+    .save-entry-actions .del-btn:hover { color: #f55; border-color: #f55; }
+    .save-empty { color: #666; font-size: 12px; text-align: center; padding: 16px; }
 
     #modal-close-btn {
       display: block;
@@ -450,38 +672,133 @@
       font-size: 12px;
     }
 
-    #modal-close-btn:hover {
-      color: #fff;
-      border-color: #72d5ff;
-    }
+    #modal-close-btn:hover { color: #fff; border-color: #72d5ff; }
   </style>
 </head>
 
 <body>
   <canvas id="gameCanvas"></canvas>
-  <div id="resources"><span style="color:#44ccff">Minerals: 0</span> &nbsp; <span style="color:#8B6914">Wood: 0</span>
-  </div>
-  <div id="hud">
-    <div id="hud-info">
-      <h3>Micro RTS</h3>
-      <p>Select units and command them around the map.</p>
+
+  <!-- ===== MAIN MENU ===== -->
+  <div id="main-menu">
+    <div class="menu-container">
+      <div class="menu-title">Micro RTS</div>
+      <div class="menu-subtitle">Minimalist Strategy Warfare</div>
+
+      <div class="menu-section" id="resume-section" style="display:none">
+        <h3>Current Session</h3>
+        <div class="menu-row">
+          <button class="menu-btn primary" id="btn-resume-game">Resume Game</button>
+        </div>
+      </div>
+
+      <!-- Single Player -->
+      <div class="menu-section">
+        <h3>Single Player</h3>
+        <div class="menu-row" style="justify-content:center; gap:10px;">
+          <button class="diff-btn" data-diff="easy">Easy</button>
+          <button class="diff-btn active" data-diff="normal">Normal</button>
+          <button class="diff-btn" data-diff="hard">Hard</button>
+        </div>
+        <div class="menu-row">
+          <button class="menu-btn primary" id="btn-new-game">New Game</button>
+          <button class="menu-btn" id="btn-load-game">Load Game</button>
+        </div>
+      </div>
+
+      <!-- Multiplayer -->
+      <div class="menu-section">
+        <h3>Multiplayer</h3>
+        <div class="player-identity">
+          <select class="icon-select" id="player-icon">
+            <option value="⚔️">⚔️</option>
+            <option value="🛡️">🛡️</option>
+            <option value="🏰">🏰</option>
+            <option value="🐉">🐉</option>
+            <option value="🦅">🦅</option>
+            <option value="🐺">🐺</option>
+            <option value="🔥">🔥</option>
+            <option value="⚡">⚡</option>
+            <option value="💀">💀</option>
+            <option value="👑">👑</option>
+            <option value="🎯">🎯</option>
+            <option value="🚀">🚀</option>
+          </select>
+          <input class="name-input" id="player-name" maxlength="12" placeholder="Your name..." value="">
+        </div>
+        <div id="net-status" class="menu-info">Not connected</div>
+
+        <div class="mp-tabs">
+          <button class="mp-tab active" data-tab="join">Join Game</button>
+          <button class="mp-tab" data-tab="create">Create Game</button>
+        </div>
+
+        <!-- Join tab -->
+        <div class="mp-tab-content active" id="tab-join">
+          <div class="menu-row">
+            <input class="menu-input" id="room-code-input" maxlength="5" placeholder="ROOM CODE">
+            <button class="menu-btn primary" id="btn-join-room">Join</button>
+          </div>
+        </div>
+
+        <!-- Create tab -->
+        <div class="mp-tab-content" id="tab-create">
+          <div class="menu-row">
+            <button class="menu-btn primary" id="btn-create-room">Create Room</button>
+          </div>
+        </div>
+
+        <!-- Room info (shown after joining/creating) -->
+        <div id="mp-room-info" style="display:none">
+          <div class="room-code-row">
+            <span class="room-code-value" id="room-code-display">-----</span>
+            <button class="copy-btn" id="btn-copy-code">Copy</button>
+            <span id="slot-display" style="color:#666; font-size:11px; margin-left:auto;">Slot: -</span>
+          </div>
+          <div id="player-list"></div>
+          <div class="menu-row" style="margin-top:8px;">
+            <button class="menu-btn primary" id="btn-start-mp" disabled>Start Game</button>
+          </div>
+          <div class="menu-row">
+            <button class="menu-btn" id="btn-pause-mp" disabled>Pause</button>
+            <button class="menu-btn" id="btn-save-mp" disabled>Save</button>
+            <button class="menu-btn" id="btn-load-mp" disabled>Load</button>
+          </div>
+          <div class="menu-info" id="mp-pause-state"></div>
+        </div>
+      </div>
+
+      <!-- Theme -->
+      <div class="menu-theme-row">
+        <span class="menu-theme-label">Theme:</span>
+        <div class="theme-btn active" data-theme="verdant" style="background: #c2a86e;" title="Desert"></div>
+        <div class="theme-btn" data-theme="obsidian" style="background: #1a0a20;" title="Obsidian"></div>
+        <div class="theme-btn" data-theme="frozen" style="background: #eefaff;" title="Frozen"></div>
+      </div>
     </div>
-    <div id="hud-actions"></div>
   </div>
-  <div id="theme-selector">
-    <div class="theme-btn active" data-theme="verdant" style="background: #c2a86e;" title="Desert (Key 1)"></div>
-    <div class="theme-btn" data-theme="obsidian" style="background: #1a0a20;" title="Obsidian (Key 2)"></div>
-    <div class="theme-btn" data-theme="frozen" style="background: #eefaff;" title="Frozen (Key 3)"></div>
+
+  <!-- ===== GAME UI (shown during gameplay) ===== -->
+  <div id="game-ui">
+    <div id="resources"><span style="color:#44ccff">Minerals: 0</span> &nbsp; <span style="color:#8B6914">Wood: 0</span></div>
+    <div id="unit-counts"></div>
+    <div id="hud">
+      <div id="hud-info">
+        <h3>Micro RTS</h3>
+        <p>Select units and command them around the map.</p>
+      </div>
+      <div id="hud-actions"></div>
+    </div>
+    <div id="save-load-bar">
+      <button class="sl-btn" id="btn-save">Save Game</button>
+      <button class="sl-btn" id="btn-load">Load Game</button>
+      <button class="sl-btn" id="btn-pause">Pause</button>
+    </div>
   </div>
-  <div id="difficulty-selector">
-    <button class="diff-btn" data-diff="easy">Easy</button>
-    <button class="diff-btn active" data-diff="normal">Normal</button>
-    <button class="diff-btn" data-diff="hard">Hard</button>
-  </div>
-  <div id="save-load-bar">
-    <button class="sl-btn" id="btn-save">Save Game</button>
-    <button class="sl-btn" id="btn-load">Load Game</button>
-  </div>
+
+  <button id="back-to-menu">Menu</button>
+
+  <!-- Save/Load Modal -->
   <div id="save-modal-overlay">
     <div id="save-modal">
       <h2 id="modal-title">Save Game</h2>
@@ -493,6 +810,7 @@
       <button id="modal-close-btn">Close</button>
     </div>
   </div>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 

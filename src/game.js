@@ -15,9 +15,12 @@ import { SimpleAI } from './ai.js';
 import { initAudio, sfxSelect, sfxMove, sfxBuild, sfxError } from './audio.js';
 
 export class Game {
-  constructor(canvas, difficulty = 'normal') {
+  constructor(canvas, difficulty = 'normal', options = {}) {
     this.canvas = canvas;
     this.difficulty = difficulty;
+    this.mode = 'singleplayer';
+    this.debugShowAll = !!options.debugShowAll;
+    this.enemyTeams = this._enemyTeamsForDifficulty(difficulty);
 
     // Dual resource system: minerals + wood (all 4 teams)
     this.resources = {
@@ -38,8 +41,8 @@ export class Game {
     this.buildingManager = new BuildingManager();
     this.renderer = new Renderer(canvas, this.sprites);
 
-    // 3 AI opponents with difficulty
-    this.ais = AI_TEAMS.map(t => new SimpleAI(t, difficulty));
+    // AI opponents by difficulty (easy = 1 enemy, normal = 2, hard = 3)
+    this.ais = this.enemyTeams.map(t => new SimpleAI(t, difficulty));
 
     // Apply hard-mode resource bonus to AI
     for (const ai of this.ais) {
@@ -68,6 +71,12 @@ export class Game {
     this.paused = false;
     this.lastTime = 0;
     this.gameTime = 0;
+
+    // Fog of war (single-player perspective: TEAM_BLUE)
+    this.fogEnabled = !this.debugShowAll;
+    this.fogVisible = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
+    this.fogExplored = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
+    this._recomputeFog();
   }
 
   // --- Resource helpers ---
@@ -101,8 +110,10 @@ export class Game {
       { team: TEAM_GREEN, baseX: 4, baseY: MAP_HEIGHT - 6 },
       { team: TEAM_YELLOW, baseX: MAP_WIDTH - 6, baseY: MAP_HEIGHT - 6 },
     ];
+    const activeTeams = new Set([TEAM_BLUE, ...this.enemyTeams]);
 
     for (const { team, baseX, baseY } of corners) {
+      if (!activeTeams.has(team)) continue;
       const base = new Building(baseX, baseY, 'base', team);
       base.built = true;
       base.buildProgress = base.buildTime;
@@ -273,6 +284,7 @@ export class Game {
     }
 
     this.renderer.minimapDirty = true;
+    this._recomputeFog();
   }
 
   _handleInput() {
@@ -351,7 +363,11 @@ export class Game {
         }
 
         if (clicked && clicked.team === TEAM_BLUE) {
-          clicked.selected = true;
+          if ((leftClick.clickCount || 1) >= 2) {
+            this._selectVisibleSameTypeUnits(clicked.type, TEAM_BLUE);
+          } else {
+            clicked.selected = true;
+          }
           sfxSelect();
         } else if (clickedBuilding && clickedBuilding.team === TEAM_BLUE) {
           clickedBuilding.selected = true;
@@ -371,13 +387,15 @@ export class Game {
 
         const targetUnit = this.unitManager.getUnitAtScreen(rightClick.x, rightClick.y, this.camera);
         const targetBuilding = this.buildingManager.getBuildingAtScreen(rightClick.x, rightClick.y, this.camera);
+        const canSeeUnit = targetUnit ? this.isWorldVisible(targetUnit.x, targetUnit.y) : false;
+        const canSeeBuilding = targetBuilding ? this.isWorldVisible(targetBuilding.x, targetBuilding.y) : false;
 
-        if (targetUnit && targetUnit.team !== TEAM_BLUE) {
+        if (targetUnit && targetUnit.team !== TEAM_BLUE && canSeeUnit) {
           for (const unit of selected) {
             unit.attackTarget(targetUnit, this.map);
           }
           sfxMove();
-        } else if (targetBuilding && targetBuilding.team !== TEAM_BLUE) {
+        } else if (targetBuilding && targetBuilding.team !== TEAM_BLUE && canSeeBuilding) {
           for (const unit of selected) {
             unit.attackBuilding(targetBuilding, this.map);
           }
@@ -460,6 +478,11 @@ export class Game {
       return;
     }
 
+    if (key === 'p') {
+      this.togglePause();
+      return;
+    }
+
     // Theme hotkeys
     if (key === '1') { this.switchTheme('verdant'); return; }
     if (key === '2') { this.switchTheme('obsidian'); return; }
@@ -533,11 +556,21 @@ export class Game {
     this.sprites.generate(theme);
   }
 
+  togglePause() {
+    this.paused = !this.paused;
+  }
+
   setDifficulty(difficulty) {
     this.difficulty = difficulty;
     for (const ai of this.ais) {
       ai.setDifficulty(difficulty);
     }
+  }
+
+  _enemyTeamsForDifficulty(difficulty) {
+    if (difficulty === 'easy') return [TEAM_RED];
+    if (difficulty === 'normal') return [TEAM_RED, TEAM_GREEN];
+    return [TEAM_RED, TEAM_GREEN, TEAM_YELLOW];
   }
 
   resize(w, h) {
@@ -600,9 +633,12 @@ export class Game {
         mineralAmounts: Array.from(this.map.mineralAmounts.entries()),
         woodAmounts: Array.from(this.map.woodAmounts.entries()),
         mapTiles: Array.from(this.map.tiles),
+        fogEnabled: this.fogEnabled,
+        fogVisible: Array.from(this.fogVisible),
+        fogExplored: Array.from(this.fogExplored),
         buildings: this.buildingManager.buildings.map(b => ({
           id: b.id, tileX: b.tileX, tileY: b.tileY, type: b.type, team: b.team,
-          hp: b.hp, built: b.built, buildProgress: b.buildProgress,
+          hp: b.hp, built: b.built, buildProgress: b.buildProgress, constructionQueued: !!b.constructionQueued,
           trainQueue: b.trainQueue.map(q => ({ type: q.type, timeLeft: q.timeLeft })),
           rallyX: b.rallyX, rallyY: b.rallyY,
         })),
@@ -611,6 +647,7 @@ export class Game {
           state: u.state, carrying: u.carrying, carryType: u.carryType,
           gatherTarget: u.gatherTarget, buildTimer: u.buildTimer,
           buildTargetId: u.buildTarget ? u.buildTarget.id : null,
+          buildQueueIds: Array.isArray(u.buildQueue) ? u.buildQueue.map(b => b.id) : [],
         })),
         ai: this.ais.map(a => ({
           team: a.team, timer: a.timer, waveTimer: a.waveTimer,
@@ -677,6 +714,16 @@ export class Game {
       this.map.mineralAmounts = new Map(save.mineralAmounts);
       this.map.woodAmounts = new Map(save.woodAmounts);
 
+      this.fogEnabled = save.fogEnabled !== undefined ? !!save.fogEnabled : !this.debugShowAll;
+      if (Array.isArray(save.fogVisible) && Array.isArray(save.fogExplored)) {
+        this.fogVisible = new Uint8Array(save.fogVisible);
+        this.fogExplored = new Uint8Array(save.fogExplored);
+      } else {
+        this.fogVisible = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
+        this.fogExplored = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
+        this._recomputeFog();
+      }
+
       // Restore resources
       this.resources = save.resources;
 
@@ -697,6 +744,7 @@ export class Game {
         b.hp = bd.hp;
         b.built = bd.built;
         b.buildProgress = bd.buildProgress;
+        b.constructionQueued = !!bd.constructionQueued;
         b.trainQueue = bd.trainQueue || [];
         if (bd.rallyX != null) { b.rallyX = bd.rallyX; b.rallyY = bd.rallyY; }
         this.buildingManager.add(b);
@@ -719,6 +767,11 @@ export class Game {
         if (ud.buildTargetId != null) {
           u.buildTarget = this.buildingManager.buildings.find(b => b.id === ud.buildTargetId) || null;
           if (u.buildTarget) u.state = 'building';
+        }
+        if (Array.isArray(ud.buildQueueIds) && ud.buildQueueIds.length > 0) {
+          u.buildQueue = ud.buildQueueIds
+            .map(id => this.buildingManager.buildings.find(b => b.id === id))
+            .filter(Boolean);
         }
         // Workers gathering go back to gathering state
         if (ud.state === 'gathering' && ud.gatherTarget) {
@@ -747,10 +800,104 @@ export class Game {
       }
 
       this.gameTime = save.gameTime || 0;
+      this.renderer.minimapDirty = true;
       return true;
     } catch (e) {
       console.warn('Load failed:', e);
       return false;
     }
+  }
+
+  _selectVisibleSameTypeUnits(unitType, team) {
+    for (const u of this.unitManager.units) {
+      if (u.team !== team || u.type !== unitType) continue;
+      const screen = this.camera.worldToScreen(u.x, u.y);
+      if (screen.x >= 0 && screen.x <= this.canvas.width && screen.y >= 0 && screen.y <= this.canvas.height) {
+        u.selected = true;
+      }
+    }
+  }
+
+  _tileIndex(tx, ty) {
+    return ty * MAP_WIDTH + tx;
+  }
+
+  _markVisionCircle(cx, cy, radiusTiles) {
+    const r2 = radiusTiles * radiusTiles;
+    const minX = Math.max(0, cx - radiusTiles);
+    const maxX = Math.min(MAP_WIDTH - 1, cx + radiusTiles);
+    const minY = Math.max(0, cy - radiusTiles);
+    const maxY = Math.min(MAP_HEIGHT - 1, cy + radiusTiles);
+
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const dx = x - cx;
+        const dy = y - cy;
+        if (dx * dx + dy * dy <= r2) {
+          const i = this._tileIndex(x, y);
+          this.fogVisible[i] = 1;
+          this.fogExplored[i] = 1;
+        }
+      }
+    }
+  }
+
+  _recomputeFog() {
+    if (!this.fogEnabled) {
+      this.fogVisible.fill(1);
+      this.fogExplored.fill(1);
+      return;
+    }
+
+    this.fogVisible.fill(0);
+
+    const unitVision = {
+      worker: 5,
+      soldier: 6,
+      tank: 7,
+      rocket: 7,
+      bomber: 8,
+      battleship: 9,
+    };
+
+    const buildingVision = {
+      base: 8,
+      barracks: 7,
+      factory: 7,
+      dock: 8,
+      tower: 9,
+    };
+
+    for (const u of this.unitManager.units) {
+      if (u.team !== TEAM_BLUE || u.hp <= 0) continue;
+      const tx = Math.floor(u.x / TILE_SIZE);
+      const ty = Math.floor(u.y / TILE_SIZE);
+      this._markVisionCircle(tx, ty, unitVision[u.type] || 6);
+    }
+
+    for (const b of this.buildingManager.buildings) {
+      if (b.team !== TEAM_BLUE || b.hp <= 0) continue;
+      const tx = Math.floor(b.x / TILE_SIZE);
+      const ty = Math.floor(b.y / TILE_SIZE);
+      this._markVisionCircle(tx, ty, buildingVision[b.type] || 7);
+    }
+  }
+
+  isTileVisible(tx, ty) {
+    if (!this.fogEnabled) return true;
+    if (tx < 0 || ty < 0 || tx >= MAP_WIDTH || ty >= MAP_HEIGHT) return false;
+    return this.fogVisible[this._tileIndex(tx, ty)] === 1;
+  }
+
+  isTileExplored(tx, ty) {
+    if (!this.fogEnabled) return true;
+    if (tx < 0 || ty < 0 || tx >= MAP_WIDTH || ty >= MAP_HEIGHT) return false;
+    return this.fogExplored[this._tileIndex(tx, ty)] === 1;
+  }
+
+  isWorldVisible(wx, wy) {
+    const tx = Math.floor(wx / TILE_SIZE);
+    const ty = Math.floor(wy / TILE_SIZE);
+    return this.isTileVisible(tx, ty);
   }
 }

@@ -1,65 +1,455 @@
 import { Game } from './game.js';
+import { MultiplayerGame } from './multiplayerGame.js';
+import { NetworkClient } from './network.js';
 
-let currentDifficulty = 'normal';
+const STORAGE_KEY = 'micro_rts_session_v1';
+const TEAM_NAMES = ['Blue', 'Red', 'Green', 'Yellow'];
+const TEAM_CSS = ['#4488ff', '#ff4444', '#44cc44', '#ffcc00'];
+const DEBUG_REVEAL = (() => {
+  const v = new URLSearchParams(window.location.search).get('debug');
+  return v === '1' || v === 'true';
+})();
 
-function startGame(canvas, difficulty, loadSlot = null) {
-  // Stop previous game if running
-  if (window.game) {
-    window.game.running = false;
+let game = null;
+let network = null;
+let currentMode = null; // 'single' | 'multi' | null
+let selectedDifficulty = 'normal';
+let selectedTheme = 'verdant';
+
+// Multiplayer state
+let roomCode = null;
+let playerId = null;
+let reconnectToken = null;
+let playerSlot = null;
+let roomStatus = 'WAITING';
+let isHost = false;
+let lastPlayers = [];
+let roomPaused = false;
+let roomHasSave = false;
+let modalPrevPaused = false;
+
+// DOM refs (cached after init)
+let canvas, menuEl, gameUiEl, backBtn, saveLoadBar;
+let resumeSectionEl;
+
+// --- Helpers ---
+
+function getSocketUrl() {
+  const fromQuery = new URLSearchParams(window.location.search).get('ws');
+  if (fromQuery) return fromQuery;
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${protocol}://${window.location.hostname}:8080`;
+}
+
+function setStatus(text) {
+  const el = document.getElementById('net-status');
+  if (el) el.textContent = text;
+}
+
+function persistSession() {
+  if (!roomCode || !playerId || !reconnectToken) return;
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ roomCode, playerId, reconnectToken }));
+}
+
+function clearSession() {
+  sessionStorage.removeItem(STORAGE_KEY);
+}
+
+function readSession() {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
   }
+}
 
-  currentDifficulty = difficulty;
-  const ctx = canvas.getContext('2d');
-  ctx.imageSmoothingEnabled = false;
+function escapeHtml(str) {
+  return str.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
 
-  const game = new Game(canvas, difficulty);
+function getPlayerName() {
+  const el = document.getElementById('player-name');
+  return el ? el.value.trim() : '';
+}
+
+function getPlayerIcon() {
+  const el = document.getElementById('player-icon');
+  return el ? el.value : '⚔️';
+}
+
+function sendPlayerInfo() {
+  if (!network) return;
+  network.send('SET_PLAYER_INFO', { name: getPlayerName(), icon: getPlayerIcon() });
+}
+
+// --- Menu visibility ---
+
+function showMenu() {
+  menuEl.classList.remove('hidden');
+  gameUiEl.classList.remove('active');
+  backBtn.style.display = 'none';
+  saveLoadBar.classList.remove('active');
+  updateResumeUi();
+}
+
+function hideMenu() {
+  menuEl.classList.add('hidden');
+  gameUiEl.classList.add('active');
+  backBtn.style.display = 'block';
+  updateResumeUi();
+}
+
+function canResumeCurrentGame() {
+  return !!(game && game.running && (currentMode === 'single' || currentMode === 'multi'));
+}
+
+function updateResumeUi() {
+  if (!resumeSectionEl) return;
+  const show = canResumeCurrentGame() && !document.getElementById('save-modal-overlay').classList.contains('open');
+  resumeSectionEl.style.display = show ? '' : 'none';
+}
+
+// --- Stop current game ---
+
+function stopGame() {
+  if (game) {
+    game.running = false;
+    game = null;
+  }
+  currentMode = null;
+  roomCode = null;
+  playerId = null;
+  reconnectToken = null;
+  playerSlot = null;
+  roomStatus = 'WAITING';
+  isHost = false;
+  lastPlayers = [];
+  roomPaused = false;
+  roomHasSave = false;
+  updateRoomUi();
+  updatePlayerList([]);
+  updateSinglePauseUi();
+  updateResumeUi();
+}
+
+// --- Single Player ---
+
+function startSinglePlayer(difficulty, loadSlot) {
+  stopGame();
+  currentMode = 'single';
+  selectedDifficulty = difficulty;
+
+  game = new Game(canvas, difficulty, { debugShowAll: DEBUG_REVEAL });
+  game.switchTheme(selectedTheme);
   window.game = game;
 
   if (loadSlot) {
-    const ok = game.loadFromSlot(loadSlot);
-    if (ok) {
-      currentDifficulty = game.difficulty;
-      showSaveIndicator('Game restored');
+    game.loadFromSlot(loadSlot);
+  }
+
+  hideMenu();
+  saveLoadBar.classList.add('active');
+  updateSinglePauseUi();
+  game.start();
+}
+
+// --- Multiplayer ---
+
+let pendingNetworkAction = null;
+
+function ensureNetwork(onReady) {
+  if (network && network.ws && network.ws.readyState === WebSocket.OPEN) {
+    onReady();
+    return;
+  }
+  pendingNetworkAction = onReady;
+  if (network && network.ws && network.ws.readyState === WebSocket.CONNECTING) {
+    return; // already connecting, action will fire on open
+  }
+  if (!network) {
+    network = new NetworkClient(getSocketUrl());
+    bindNetworkHandlers();
+  }
+  network.connect();
+  setStatus('Connecting...');
+}
+
+function startMultiplayer(snapshot) {
+  currentMode = 'multi';
+
+  if (!game || !(game instanceof MultiplayerGame)) {
+    game = new MultiplayerGame(canvas, network);
+    game.switchTheme(selectedTheme);
+    window.game = game;
+    game.start();
+  }
+
+  game.setRoomContext({ roomCode, playerSlot, status: 'RUNNING', paused: roomPaused });
+
+  if (snapshot) {
+    game.applySnapshot(snapshot);
+  }
+
+  hideMenu();
+  saveLoadBar.classList.remove('active');
+}
+
+function updateRoomUi() {
+  const codeEl = document.getElementById('room-code-display');
+  const slotEl = document.getElementById('slot-display');
+  const startBtn = document.getElementById('btn-start-mp');
+  const pauseBtn = document.getElementById('btn-pause-mp');
+  const saveBtn = document.getElementById('btn-save-mp');
+  const loadBtn = document.getElementById('btn-load-mp');
+  const pauseStateEl = document.getElementById('mp-pause-state');
+  const infoEl = document.getElementById('mp-room-info');
+
+  if (codeEl) codeEl.textContent = roomCode || '-----';
+  if (slotEl) slotEl.textContent = playerSlot !== null ? `You: ${TEAM_NAMES[playerSlot]}` : '';
+  if (startBtn) startBtn.disabled = roomStatus !== 'WAITING' || !isHost;
+  if (pauseBtn) {
+    pauseBtn.disabled = roomStatus !== 'RUNNING' || !isHost;
+    pauseBtn.textContent = roomPaused ? 'Resume' : 'Pause';
+  }
+  if (saveBtn) saveBtn.disabled = roomStatus !== 'RUNNING' || !isHost;
+  if (loadBtn) loadBtn.disabled = roomStatus !== 'RUNNING' || !isHost || !roomHasSave;
+  if (pauseStateEl) pauseStateEl.textContent = roomStatus === 'RUNNING' ? (roomPaused ? 'Paused' : 'Live') : '';
+  if (infoEl) infoEl.style.display = roomCode ? '' : 'none';
+}
+
+function updateSinglePauseUi() {
+  const pauseBtn = document.getElementById('btn-pause');
+  if (!pauseBtn) return;
+  const isSingle = currentMode === 'single' && game instanceof Game;
+  pauseBtn.disabled = !isSingle;
+  pauseBtn.textContent = isSingle && game.paused ? 'Resume' : 'Pause';
+}
+
+function updatePlayerList(players = []) {
+  lastPlayers = players;
+  const list = document.getElementById('player-list');
+  if (!list) return;
+
+  const lines = [];
+  for (const p of players) {
+    const color = TEAM_CSS[p.slot] || '#aaa';
+    const label = `<span class="slot-label" style="color:${color}">${TEAM_NAMES[p.slot]}</span>`;
+
+    if (p.isAI) {
+      // AI slot
+      const diffLabel = p.aiDifficulty ? p.aiDifficulty.charAt(0).toUpperCase() + p.aiDifficulty.slice(1) : 'Normal';
+      let controls = `<span class="slot-status">AI (${diffLabel})</span>`;
+      if (isHost && roomStatus === 'WAITING') {
+        controls = `<span class="slot-status">AI</span>` +
+          `<select class="ai-select" data-slot="${p.slot}">` +
+          `<option value="easy"${p.aiDifficulty === 'easy' ? ' selected' : ''}>Easy</option>` +
+          `<option value="normal"${p.aiDifficulty === 'normal' ? ' selected' : ''}>Normal</option>` +
+          `<option value="hard"${p.aiDifficulty === 'hard' ? ' selected' : ''}>Hard</option>` +
+          `<option value="remove">Remove</option>` +
+          `</select>`;
+      }
+      lines.push(`<div class="player-slot">${label}${controls}</div>`);
+    } else if (p.occupied) {
+      const icon = p.icon ? `<span class="slot-icon">${p.icon}</span>` : '';
+      const displayName = p.name ? escapeHtml(p.name) : (p.connected ? 'Player' : 'Reconnecting...');
+      const host = p.isHost ? ' (Host)' : '';
+      const connState = p.connected ? '' : ' <span style="color:#f84">reconnecting</span>';
+      lines.push(`<div class="player-slot">${label}<span class="slot-status">${icon}${displayName}${host}${connState}</span></div>`);
+    } else {
+      // Empty slot — host can add AI
+      let controls = `<span class="slot-status" style="color:#555">Open</span>`;
+      if (isHost && roomStatus === 'WAITING') {
+        controls += `<select class="ai-select" data-slot="${p.slot}">` +
+          `<option value="">Open</option>` +
+          `<option value="easy">AI Easy</option>` +
+          `<option value="normal">AI Normal</option>` +
+          `<option value="hard">AI Hard</option>` +
+          `</select>`;
+      }
+      lines.push(`<div class="player-slot">${label}${controls}</div>`);
     }
   }
 
-  game.start();
+  list.innerHTML = lines.join('');
 
-  // Update difficulty button UI to match actual game difficulty
-  document.querySelectorAll('.diff-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.diff === currentDifficulty);
+  // Wire AI select dropdowns
+  list.querySelectorAll('.ai-select').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const slot = parseInt(sel.dataset.slot);
+      const val = sel.value;
+      if (!network) return;
+      if (val === 'remove' || val === '') {
+        network.send('REMOVE_SLOT_AI', { slot });
+      } else {
+        network.send('SET_SLOT_AI', { slot, difficulty: val });
+      }
+    });
   });
 }
 
-function showSaveIndicator(text = 'Game saved') {
-  let el = document.getElementById('save-indicator');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'save-indicator';
-    document.body.appendChild(el);
-  }
-  el.textContent = text;
-  el.style.opacity = '1';
-  clearTimeout(el._fadeTimer);
-  el._fadeTimer = setTimeout(() => { el.style.opacity = '0'; }, 1500);
+function bindNetworkHandlers() {
+  network.onOpen(() => {
+    setStatus('Connected to server');
+    const session = readSession();
+    if (session?.roomCode && session?.playerId && session?.reconnectToken) {
+      network.rejoinRoom(session.roomCode, session.playerId, session.reconnectToken);
+      setStatus(`Attempting rejoin ${session.roomCode}...`);
+    } else if (pendingNetworkAction) {
+      const action = pendingNetworkAction;
+      pendingNetworkAction = null;
+      action();
+    }
+  });
+
+  network.onClose(() => {
+    setStatus('Disconnected from server');
+  });
+
+  network.onMessage((msg) => {
+    switch (msg.type) {
+      case 'HELLO':
+        break;
+
+      case 'ROOM_CREATED':
+      case 'ROOM_JOINED':
+      case 'REJOINED': {
+        roomCode = msg.roomCode;
+        playerId = msg.playerId;
+        reconnectToken = msg.reconnectToken;
+        playerSlot = msg.playerSlot;
+        roomStatus = msg.status || 'WAITING';
+        roomPaused = !!msg.paused;
+        roomHasSave = !!msg.hasSave;
+        isHost = msg.playerSlot === 0;
+        persistSession();
+        sendPlayerInfo();
+
+        if (game && game instanceof MultiplayerGame) {
+          game.setRoomContext({ roomCode, playerSlot, status: roomStatus, paused: roomPaused });
+        }
+
+        updateRoomUi();
+        updatePlayerList(msg.players || []);
+        setStatus(`Joined room ${roomCode}`);
+        break;
+      }
+
+      case 'ROOM_UPDATE': {
+        roomCode = msg.roomCode || roomCode;
+        roomStatus = msg.status || roomStatus;
+        roomPaused = !!msg.paused;
+        roomHasSave = !!msg.hasSave;
+        if (msg.hostSlot !== undefined) {
+          isHost = playerSlot === msg.hostSlot;
+        }
+        if (game && game instanceof MultiplayerGame) {
+          game.setRoomContext({ status: roomStatus, paused: roomPaused });
+        }
+        updateRoomUi();
+        updatePlayerList(msg.players || []);
+        setStatus(`Room ${roomCode} - ${roomStatus}${roomPaused ? ' (Paused)' : ''}`);
+        break;
+      }
+
+      case 'GAME_STARTED': {
+        roomStatus = 'RUNNING';
+        roomPaused = false;
+        playerSlot = msg.playerSlot ?? playerSlot;
+        updateRoomUi();
+        startMultiplayer(msg.snapshot);
+        setStatus(`Game started in ${msg.roomCode || roomCode}`);
+        break;
+      }
+
+      case 'STATE': {
+        if (msg.snapshot && game && game instanceof MultiplayerGame) {
+          game.applySnapshot(msg.snapshot);
+        }
+        break;
+      }
+
+      case 'ROOM_FULL':
+        setStatus(`Room ${msg.roomCode} is full`);
+        break;
+      case 'ROOM_NOT_FOUND':
+        setStatus(`Room ${msg.roomCode || ''} not found`);
+        break;
+      case 'ROOM_ALREADY_STARTED':
+        setStatus(`Room ${msg.roomCode} already started`);
+        break;
+      case 'REJOIN_REJECTED':
+        clearSession();
+        setStatus('Rejoin rejected, create or join room');
+        break;
+
+      case 'PLAYER_DISCONNECTED':
+      case 'GAME_ENDED':
+      case 'ROOM_CLOSED':
+      case 'ROOM_EMPTY':
+        roomStatus = 'ENDED';
+        roomPaused = false;
+        roomHasSave = false;
+        if (game && game instanceof MultiplayerGame) {
+          game.setRoomContext({ status: 'ENDED', paused: false });
+        }
+        clearSession();
+        updateRoomUi();
+        setStatus(msg.type.replaceAll('_', ' ').toLowerCase());
+        break;
+
+      default:
+        break;
+    }
+  });
 }
 
-// --- Save/Load modal logic ---
+// --- Copy room code ---
 
-let modalMode = null; // 'save' or 'load'
+function copyRoomCode() {
+  if (!roomCode) return;
+  const btn = document.getElementById('btn-copy-code');
+  navigator.clipboard.writeText(roomCode).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'Copy';
+      btn.classList.remove('copied');
+    }, 1500);
+  }).catch(() => {
+    // Fallback: select text
+    const el = document.getElementById('room-code-display');
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  });
+}
+
+// --- Multiplayer tabs ---
+
+function switchTab(tabName) {
+  document.querySelectorAll('.mp-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+  document.querySelectorAll('.mp-tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
+}
+
+// --- Save / Load Modal ---
+
+let modalMode = null; // 'save' | 'load' | 'menu-load'
 
 function openModal(mode) {
   modalMode = mode;
   const overlay = document.getElementById('save-modal-overlay');
   const title = document.getElementById('modal-title');
   const nameRow = document.getElementById('save-name-row');
-  const input = document.getElementById('save-name-input');
+  const nameInput = document.getElementById('save-name-input');
 
   if (mode === 'save') {
     title.textContent = 'Save Game';
     nameRow.style.display = 'flex';
-    input.value = '';
-    input.focus();
+    nameInput.value = '';
+    nameInput.focus();
   } else {
     title.textContent = 'Load Game';
     nameRow.style.display = 'none';
@@ -68,200 +458,257 @@ function openModal(mode) {
   renderSaveList();
   overlay.classList.add('open');
 
-  // Pause game while modal open
-  if (window.game) window.game.paused = true;
+  if (currentMode === 'single' && game instanceof Game) {
+    modalPrevPaused = game.paused;
+    game.paused = true;
+    updateSinglePauseUi();
+  }
 }
 
 function closeModal() {
-  document.getElementById('save-modal-overlay').classList.remove('open');
+  const overlay = document.getElementById('save-modal-overlay');
+  overlay.classList.remove('open');
+  if (currentMode === 'single' && game instanceof Game) {
+    game.paused = modalPrevPaused;
+    updateSinglePauseUi();
+  }
   modalMode = null;
-  if (window.game) window.game.paused = false;
+  updateResumeUi();
 }
 
 function renderSaveList() {
-  const list = document.getElementById('save-list');
+  const listEl = document.getElementById('save-list');
   const saves = Game.getSaveList();
 
   if (saves.length === 0) {
-    list.innerHTML = '<div class="save-empty">No saved games</div>';
+    listEl.innerHTML = '<div class="save-empty">No saves found</div>';
     return;
   }
 
-  list.innerHTML = '';
-  for (const s of saves) {
-    const entry = document.createElement('div');
-    entry.className = 'save-entry';
-
-    const timeAgo = s.mins < 60
-      ? `${s.mins}m ago`
-      : `${Math.floor(s.mins / 60)}h ${s.mins % 60}m ago`;
-
-    entry.innerHTML = `
+  listEl.innerHTML = saves.map(s => {
+    const dateStr = new Date(s.timestamp).toLocaleString();
+    return `<div class="save-entry">
       <div class="save-entry-info">
         <div class="save-entry-name">${escapeHtml(s.name)}</div>
-        <div class="save-entry-detail">${s.difficulty} | ${s.gameMin}m played | saved ${timeAgo}</div>
+        <div class="save-entry-detail">${dateStr} — ${s.gameMin}m played — ${s.difficulty}</div>
       </div>
       <div class="save-entry-actions">
-        ${modalMode === 'save'
-          ? `<button class="overwrite-btn" data-name="${escapeAttr(s.name)}">Overwrite</button>`
-          : `<button class="load-btn" data-name="${escapeAttr(s.name)}">Load</button>`
-        }
-        <button class="del-btn" data-name="${escapeAttr(s.name)}">Delete</button>
+        <button class="load-btn" data-name="${escapeHtml(s.name)}">Load</button>
+        <button class="del-btn" data-name="${escapeHtml(s.name)}">Del</button>
       </div>
-    `;
-    list.appendChild(entry);
-  }
+    </div>`;
+  }).join('');
 
-  // Attach event listeners
-  list.querySelectorAll('.load-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
+  listEl.querySelectorAll('.load-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
       const name = btn.dataset.name;
-      closeModal();
-      const canvas = document.getElementById('gameCanvas');
-      startGame(canvas, currentDifficulty, name);
-    });
-  });
-
-  list.querySelectorAll('.overwrite-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const name = btn.dataset.name;
-      if (window.game) {
-        window.game.saveToSlot(name);
-        showSaveIndicator(`Saved: ${name}`);
+      if (modalMode === 'menu-load') {
+        closeModal();
+        startSinglePlayer(selectedDifficulty, name);
+      } else {
+        if (game && game.loadFromSlot) {
+          game.loadFromSlot(name);
+        }
+        closeModal();
       }
-      renderSaveList();
     });
   });
 
-  list.querySelectorAll('.del-btn').forEach(btn => {
+  listEl.querySelectorAll('.del-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const name = btn.dataset.name;
-      Game.deleteSave(name);
+      Game.deleteSave(btn.dataset.name);
       renderSaveList();
     });
   });
 }
 
-function escapeHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function escapeAttr(str) {
-  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-}
+// --- Init ---
 
 function init() {
-  const canvas = document.getElementById('gameCanvas');
-  const ctx = canvas.getContext('2d');
+  canvas = document.getElementById('gameCanvas');
+  menuEl = document.getElementById('main-menu');
+  gameUiEl = document.getElementById('game-ui');
+  backBtn = document.getElementById('back-to-menu');
+  saveLoadBar = document.getElementById('save-load-bar');
+  resumeSectionEl = document.getElementById('resume-section');
 
-  // Set canvas to window size
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
   function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    if (window.game) {
-      window.game.resize(canvas.width, canvas.height);
-    }
+    if (game) game.resize(canvas.width, canvas.height);
   }
 
   resize();
   window.addEventListener('resize', resize);
 
-  ctx.imageSmoothingEnabled = false;
+  // --- Multiplayer tabs ---
+  document.querySelectorAll('.mp-tab').forEach(tab => {
+    tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+  });
 
-  // Start a new game immediately
-  startGame(canvas, currentDifficulty);
+  // --- Difficulty buttons ---
+  document.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedDifficulty = btn.dataset.diff;
+    });
+  });
 
-  // Warn before refresh/close (no auto-save, just warning)
-  window.addEventListener('beforeunload', (e) => {
-    if (window.game && window.game.running) {
-      e.preventDefault();
+  // --- Theme buttons ---
+  document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedTheme = btn.dataset.theme;
+      if (game && game.switchTheme) game.switchTheme(selectedTheme);
+    });
+  });
+
+  // --- Single Player buttons ---
+  document.getElementById('btn-new-game').addEventListener('click', () => {
+    if (canResumeCurrentGame()) stopGame();
+    startSinglePlayer(selectedDifficulty);
+  });
+
+  document.getElementById('btn-load-game').addEventListener('click', () => {
+    openModal('menu-load');
+  });
+
+  // --- Multiplayer buttons ---
+  document.getElementById('btn-create-room').addEventListener('click', () => {
+    ensureNetwork(() => {
+      network.createRoom();
+      setStatus('Creating room...');
+    });
+  });
+
+  document.getElementById('btn-join-room').addEventListener('click', () => {
+    const code = document.getElementById('room-code-input').value.trim().toUpperCase();
+    if (!code) {
+      setStatus('Enter a room code');
+      return;
+    }
+    ensureNetwork(() => {
+      network.joinRoom(code);
+      setStatus(`Joining ${code}...`);
+    });
+  });
+
+  document.getElementById('btn-start-mp').addEventListener('click', () => {
+    if (network) network.startGame();
+  });
+
+  document.getElementById('btn-resume-game').addEventListener('click', () => {
+    if (!canResumeCurrentGame()) return;
+    hideMenu();
+    if (currentMode === 'single' && game instanceof Game) {
+      game.paused = false;
+      updateSinglePauseUi();
     }
   });
 
-  // Save/Load buttons
-  document.getElementById('btn-save').addEventListener('click', () => openModal('save'));
-  document.getElementById('btn-load').addEventListener('click', () => openModal('load'));
+  document.getElementById('btn-pause-mp').addEventListener('click', () => {
+    if (!network) return;
+    if (roomPaused) {
+      network.resumeGame();
+    } else {
+      network.pauseGame();
+    }
+  });
 
-  // Modal close
+  document.getElementById('btn-save-mp').addEventListener('click', () => {
+    if (network) network.saveGame();
+  });
+
+  document.getElementById('btn-load-mp').addEventListener('click', () => {
+    if (network) network.loadGame();
+  });
+
+  // --- Copy room code ---
+  document.getElementById('btn-copy-code').addEventListener('click', copyRoomCode);
+
+  // --- Player identity (name + icon) ---
+  document.getElementById('player-name').addEventListener('input', () => {
+    if (roomCode) sendPlayerInfo();
+  });
+  document.getElementById('player-icon').addEventListener('change', () => {
+    if (roomCode) sendPlayerInfo();
+  });
+
+  // --- Save / Load bar (during single player) ---
+  document.getElementById('btn-save').addEventListener('click', () => {
+    openModal('save');
+  });
+
+  document.getElementById('btn-load').addEventListener('click', () => {
+    openModal('load');
+  });
+
+  document.getElementById('btn-pause').addEventListener('click', () => {
+    if (currentMode !== 'single' || !(game instanceof Game)) return;
+    game.togglePause();
+    updateSinglePauseUi();
+  });
+
+  // --- Save modal confirm ---
+  document.getElementById('save-confirm-btn').addEventListener('click', () => {
+    const nameInput = document.getElementById('save-name-input');
+    const name = nameInput.value.trim();
+    if (!name) return;
+    if (game && game.saveToSlot) {
+      game.saveToSlot(name);
+    }
+    closeModal();
+  });
+
+  document.getElementById('save-name-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      document.getElementById('save-confirm-btn').click();
+    }
+  });
+
+  // --- Modal close ---
   document.getElementById('modal-close-btn').addEventListener('click', closeModal);
   document.getElementById('save-modal-overlay').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) closeModal();
   });
 
-  // Save confirm button
-  document.getElementById('save-confirm-btn').addEventListener('click', () => {
-    const input = document.getElementById('save-name-input');
-    const name = input.value.trim();
-    if (!name) return;
-    if (window.game) {
-      window.game.saveToSlot(name);
-      showSaveIndicator(`Saved: ${name}`);
+  // --- Back to menu ---
+  backBtn.addEventListener('click', () => {
+    if (currentMode === 'single' && game instanceof Game) {
+      game.paused = true;
+      updateSinglePauseUi();
     }
-    closeModal();
+    showMenu();
   });
 
-  // Enter key in save input
-  document.getElementById('save-name-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      document.getElementById('save-confirm-btn').click();
-    }
-    e.stopPropagation(); // prevent game hotkeys
-  });
-
-  // Escape closes modal
+  // --- Escape to close modal ---
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modalMode) {
-      closeModal();
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'Escape') {
+      if (document.getElementById('save-modal-overlay').classList.contains('open')) {
+        closeModal();
+        return;
+      }
+    }
+    if (e.key.toLowerCase() === 'p' && currentMode === 'single' && game instanceof Game) {
+      setTimeout(updateSinglePauseUi, 0);
     }
   });
 
-  // Difficulty buttons (live update, no restart)
-  document.querySelectorAll('.diff-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const diff = btn.dataset.diff;
-      currentDifficulty = diff;
-      if (window.game) {
-        window.game.setDifficulty(diff);
-      }
-      document.querySelectorAll('.diff-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.diff === diff);
-      });
-    });
-  });
-
-  // Theme switcher UI
-  const themeBtns = document.querySelectorAll('.theme-btn');
-  themeBtns.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const theme = btn.dataset.theme;
-      console.log('Switching to theme:', theme);
-      if (window.game) {
-        window.game.switchTheme(theme);
-        themeBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-      }
-    });
-  });
-
-  // Keyboard theme switching (update UI)
-  window.addEventListener('keydown', (e) => {
-    const themeMap = { '1': 'verdant', '2': 'obsidian', '3': 'frozen' };
-    const theme = themeMap[e.key];
-    if (theme) {
-      themeBtns.forEach(b => {
-        b.classList.toggle('active', b.dataset.theme === theme);
-      });
-    }
-  });
-
-  console.log('Micro RTS started!');
+  // Show menu
+  showMenu();
+  updateRoomUi();
+  updatePlayerList([]);
+  updateSinglePauseUi();
+  updateResumeUi();
 }
 
-// Wait for DOM
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {

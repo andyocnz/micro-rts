@@ -64,12 +64,18 @@ export class InputManager {
 
         if (dx < 4 && dy < 4) {
           // Treat as click
-          this.leftClick = { x: e.clientX, y: e.clientY, shift: this.shiftHeld };
+          this.leftClick = {
+            x: e.clientX,
+            y: e.clientY,
+            shift: this.shiftHeld,
+            clickCount: e.detail || 1,
+          };
         } else {
           // Treat as box select - leftClick will have the box info
           this.leftClick = {
             x: e.clientX, y: e.clientY,
             shift: this.shiftHeld,
+            clickCount: 1,
             box: {
               x1: Math.min(this.selBoxStart.x, this.selBoxEnd.x),
               y1: Math.min(this.selBoxStart.y, this.selBoxEnd.y),

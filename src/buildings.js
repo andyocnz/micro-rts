@@ -99,6 +99,7 @@ export class Building {
     this.built = false;
     this.buildProgress = 0;
     this.buildTime = def.buildTime;
+    this.constructionQueued = false;
 
     this.selected = false;
 

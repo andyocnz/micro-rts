@@ -1,6 +1,5 @@
 import { TILE_SIZE, UNIT_SIZE, TEAM_BLUE, MAP_WIDTH, MAP_HEIGHT, SELECTION_COLOR, TILE_MINERAL, TILE_TREE, TILE_WATER, TEAM_COLORS } from './constants.js';
-import { UNIT_DEFS } from './units.js';
-import { BUILDING_DEFS } from './buildings.js';
+import { UNIT_DEFS, BUILDING_DEFS } from '../shared/constants.js';
 
 const VIEW_W = 800;
 const VIEW_H = 600;
@@ -9,6 +8,14 @@ const WORLD_H = MAP_HEIGHT * TILE_SIZE;
 const MINIMAP_SIZE = 150;
 const MINIMAP_X = 20;
 const MOVE_MARKER_DURATION = 0.5;
+const UNIT_COUNT_ICONS = {
+  worker: '👷',
+  soldier: '🪖',
+  rocket: '🚀',
+  tank: '🛡️',
+  bomber: '🚁',
+  battleship: '🚢',
+};
 
 export class Renderer {
   constructor(canvas, sprites) {
@@ -63,6 +70,7 @@ export class Renderer {
   render(game) {
     const { ctx } = this;
     const { camera, map, unitManager, buildingManager, input } = game;
+    const playerTeam = game.localPlayerTeam ?? TEAM_BLUE;
 
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
@@ -72,25 +80,28 @@ export class Renderer {
 
     this._drawMap(map, camera);
     this._drawMoveMarkers(camera);
-    this._drawBuildings(buildingManager, camera);
-    this._drawUnits(unitManager, camera, map);
+    this._drawBuildings(buildingManager, camera, game, playerTeam);
+    this._drawUnits(unitManager, camera, map, game, playerTeam);
     this._drawBuildGhost(game);
+    this._drawFog(game, camera);
 
     ctx.restore();
 
-    this._drawMinimap(map, unitManager, buildingManager, camera);
+    this._drawSelectionBox(input);
+    this._drawMinimap(map, unitManager, buildingManager, camera, playerTeam, game);
     this._drawParticles(camera);
-    this._drawHUD(game);
+    this._drawHUD(game, playerTeam);
     this._drawHoverTooltip(game);
   }
 
   _drawHoverTooltip(game) {
     const { input, camera, unitManager, buildingManager } = game;
     const { mouseX, mouseY } = input;
+    const playerTeam = game.localPlayerTeam ?? TEAM_BLUE;
 
     // Check buildings first (larger targets)
     const hoverB = buildingManager.getBuildingAtScreen(mouseX, mouseY, camera);
-    if (hoverB) {
+    if (hoverB && (!game.fogEnabled || hoverB.team === playerTeam || game.isWorldVisible(hoverB.x, hoverB.y))) {
       const def = BUILDING_DEFS[hoverB.type];
       this._drawTooltipBox(mouseX, mouseY, def.name, this._formatCost(def.cost));
       return;
@@ -98,7 +109,7 @@ export class Renderer {
 
     // Check units
     const hoverU = unitManager.getUnitAtScreen(mouseX, mouseY, camera);
-    if (hoverU) {
+    if (hoverU && (!game.fogEnabled || hoverU.team === playerTeam || game.isWorldVisible(hoverU.x, hoverU.y))) {
       const def = UNIT_DEFS[hoverU.type];
       // For units, we show their train cost (from a typical building that produces them)
       let cost = null;
@@ -184,9 +195,12 @@ export class Renderer {
     }
   }
 
-  _drawBuildings(buildingManager, camera) {
+  _drawBuildings(buildingManager, camera, game, playerTeam) {
     const { ctx } = this;
     for (const b of buildingManager.buildings) {
+      if (game.fogEnabled && b.team !== playerTeam && !game.isWorldVisible(b.x, b.y)) {
+        continue;
+      }
       const size = b.sizeTiles * TILE_SIZE;
       const wx = b.tileX * TILE_SIZE;
       const wy = b.tileY * TILE_SIZE;
@@ -194,20 +208,24 @@ export class Renderer {
       const sprite = this.sprites.getBuilding(b.type, b.team);
 
       if (!b.built) {
-        ctx.globalAlpha = 0.4 + 0.6 * (b.buildProgress / b.buildTime);
-        // Draw scaffolding-like effect
-        ctx.strokeStyle = '#8B4513';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(wx, wy, size, size);
-        for (let i = 1; i < 4; i++) {
-          ctx.beginPath();
-          ctx.moveTo(wx + (size / 4) * i, wy);
-          ctx.lineTo(wx + (size / 4) * i, wy + size);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(wx, wy + (size / 4) * i);
-          ctx.lineTo(wx + size, wy + (size / 4) * i);
-          ctx.stroke();
+        if (b.constructionQueued) {
+          ctx.globalAlpha = 0.18;
+        } else {
+          ctx.globalAlpha = 0.4 + 0.6 * (b.buildProgress / b.buildTime);
+          // Draw scaffolding-like effect
+          ctx.strokeStyle = '#8B4513';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(wx, wy, size, size);
+          for (let i = 1; i < 4; i++) {
+            ctx.beginPath();
+            ctx.moveTo(wx + (size / 4) * i, wy);
+            ctx.lineTo(wx + (size / 4) * i, wy + size);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(wx, wy + (size / 4) * i);
+            ctx.lineTo(wx + size, wy + (size / 4) * i);
+            ctx.stroke();
+          }
         }
       }
       ctx.drawImage(sprite, wx, wy, size, size);
@@ -218,8 +236,13 @@ export class Renderer {
         const barH = 4;
         ctx.fillStyle = '#333';
         ctx.fillRect(wx, wy - 8, barW, barH);
-        ctx.fillStyle = '#ffaa00';
-        ctx.fillRect(wx, wy - 8, barW * (b.buildProgress / b.buildTime), barH);
+        if (b.constructionQueued) {
+          ctx.fillStyle = '#72d5ff';
+          ctx.fillRect(wx, wy - 8, barW * 0.1, barH);
+        } else {
+          ctx.fillStyle = '#ffaa00';
+          ctx.fillRect(wx, wy - 8, barW * (b.buildProgress / b.buildTime), barH);
+        }
       }
 
       if (b.selected) {
@@ -269,11 +292,14 @@ export class Renderer {
     }
   }
 
-  _drawUnits(unitManager, camera, map) {
+  _drawUnits(unitManager, camera, map, game, playerTeam) {
     const { ctx, sprites } = this;
     const sorted = [...unitManager.units].sort((a, b) => a.y - b.y);
 
     for (const u of sorted) {
+      if (game.fogEnabled && u.team !== playerTeam && !game.isWorldVisible(u.x, u.y)) {
+        continue;
+      }
       const ux = Math.floor(u.x);
       const uy = Math.floor(u.y);
 
@@ -500,7 +526,8 @@ export class Renderer {
     const wy = tileY * TILE_SIZE;
 
     ctx.globalAlpha = 0.5;
-    const sprite = this.sprites.getBuilding(game.buildMode, TEAM_BLUE);
+    const playerTeam = game.localPlayerTeam ?? TEAM_BLUE;
+    const sprite = this.sprites.getBuilding(game.buildMode, playerTeam);
     ctx.drawImage(sprite, wx, wy, size, size);
     ctx.globalAlpha = 1;
 
@@ -524,15 +551,50 @@ export class Renderer {
     }
   }
 
-  _drawMinimap(map, unitManager, buildingManager, camera) {
+  _drawSelectionBox(input) {
+    const box = input.getSelectionBox();
+    if (!box) return;
+
+    const { ctx } = this;
+    const w = box.x2 - box.x1;
+    const h = box.y2 - box.y1;
+
+    if (w < 2 && h < 2) return;
+
+    ctx.fillStyle = 'rgba(114, 213, 255, 0.12)';
+    ctx.fillRect(box.x1, box.y1, w, h);
+    ctx.strokeStyle = 'rgba(114, 213, 255, 0.95)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(box.x1 + 0.5, box.y1 + 0.5, w, h);
+  }
+
+  _drawFog(game, camera) {
+    if (!game.fogEnabled) return;
+    const { ctx } = this;
+    const tiles = camera.getVisibleTiles();
+
+    for (let y = tiles.startY; y < tiles.endY; y++) {
+      for (let x = tiles.startX; x < tiles.endX; x++) {
+        if (!game.isTileExplored(x, y)) {
+          ctx.fillStyle = '#000';
+          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        } else if (!game.isTileVisible(x, y)) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+          ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        }
+      }
+    }
+  }
+
+  _drawMinimap(map, unitManager, buildingManager, camera, playerTeam, game) {
     const { ctx } = this;
     const mmX = MINIMAP_X;
     const mmY = this.canvas.height - MINIMAP_SIZE - 150; // Adjusted for smaller HUD
 
     // Check for enemy proximity
     let enemyNearBase = false;
-    const playerBuildings = buildingManager.buildings.filter(b => b.team === TEAM_BLUE);
-    const enemyUnits = unitManager.units.filter(u => u.team !== TEAM_BLUE);
+    const playerBuildings = buildingManager.buildings.filter(b => b.team === playerTeam);
+    const enemyUnits = unitManager.units.filter(u => u.team !== playerTeam);
     for (const b of playerBuildings) {
       for (const e of enemyUnits) {
         const d = Math.sqrt((b.x - e.x) ** 2 + (b.y - e.y) ** 2);
@@ -565,6 +627,7 @@ export class Renderer {
 
     // Draw Buildings (Squares)
     for (const b of buildingManager.buildings) {
+      if (game.fogEnabled && b.team !== playerTeam && !game.isWorldVisible(b.x, b.y)) continue;
       const bx = mmX + b.x * scaleX;
       const by = mmY + b.y * scaleY;
       const size = (b.sizeTiles === 2 ? 6 : 4);
@@ -577,15 +640,32 @@ export class Renderer {
 
     // Draw Units (Dots)
     for (const unit of unitManager.units) {
+      if (game.fogEnabled && unit.team !== playerTeam && !game.isWorldVisible(unit.x, unit.y)) continue;
       const ux = mmX + unit.x * scaleX;
       const uy = mmY + unit.y * scaleY;
-      ctx.fillStyle = unit.team === TEAM_BLUE ? '#aaccff' : (TEAM_COLORS[unit.team]?.light || '#ffaa00');
+      ctx.fillStyle = unit.team === playerTeam ? '#aaccff' : (TEAM_COLORS[unit.team]?.light || '#ffaa00');
       if (unit.type === 'tank') {
         ctx.fillRect(Math.floor(ux) - 1.5, Math.floor(uy) - 1.5, 3, 3);
       } else {
         ctx.beginPath();
         ctx.arc(ux, uy, 1.5, 0, Math.PI * 2);
         ctx.fill();
+      }
+    }
+
+    if (game.fogEnabled) {
+      const pw = MINIMAP_SIZE / MAP_WIDTH;
+      const ph = MINIMAP_SIZE / MAP_HEIGHT;
+      for (let y = 0; y < MAP_HEIGHT; y++) {
+        for (let x = 0; x < MAP_WIDTH; x++) {
+          if (!game.isTileExplored(x, y)) {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(mmX + x * pw, mmY + y * ph, Math.ceil(pw), Math.ceil(ph));
+          } else if (!game.isTileVisible(x, y)) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(mmX + x * pw, mmY + y * ph, Math.ceil(pw), Math.ceil(ph));
+          }
+        }
       }
     }
 
@@ -620,12 +700,14 @@ export class Renderer {
     return parts.join('+');
   }
 
-  _drawHUD(game) {
+  _drawHUD(game, playerTeam) {
     const selected = game.unitManager.getSelected();
     const selectedBuildings = game.buildingManager.buildings.filter(b => b.selected);
     const hudInfo = document.getElementById('hud-info');
     const hudActions = document.getElementById('hud-actions');
-    const res = game.getResources(TEAM_BLUE);
+    const res = game.getResources(playerTeam);
+    const modeLabel = game.mode === 'multiplayer' ? 'Multiplayer' : 'Single Player';
+    const difficultyLabel = game.difficulty ? String(game.difficulty).charAt(0).toUpperCase() + String(game.difficulty).slice(1) : null;
 
     let infoHtml = '';
     let actionsHtml = '';
@@ -637,7 +719,7 @@ export class Renderer {
     } else if (selectedBuildings.length > 0) {
       const b = selectedBuildings[0];
       const def = BUILDING_DEFS[b.type];
-      infoHtml = `<h3>${def.name}</h3><p>Status: ${b.built ? '<span style="color:#4f4">Operational</span>' : '<span style="color:#ffcc00">Under Construction (' + Math.floor((b.buildProgress / b.buildTime) * 100) + '%)</span>'}</p><p>Armor: Heavy | HP: ${Math.floor(b.hp)} / ${b.maxHp}</p>`;
+      infoHtml = `<h3>${def.name}</h3><p>Status: ${b.built ? '<span style="color:#4f4">Operational</span>' : (b.constructionQueued ? '<span style="color:#72d5ff">Queued for Construction</span>' : '<span style="color:#ffcc00">Under Construction (' + Math.floor((b.buildProgress / b.buildTime) * 100) + '%)</span>')}</p><p>Armor: Heavy | HP: ${Math.floor(b.hp)} / ${b.maxHp}</p>`;
       if (b.built && b.trainQueue.length > 0) {
         const current = b.trainQueue[0];
         const totalTime = def.trainTimes[current.type];
@@ -682,8 +764,8 @@ export class Renderer {
         }
       }
     } else if (selected.length === 0) {
-      const pCount = game.unitManager.getPlayerUnits(TEAM_BLUE).length;
-      const eCount = game.unitManager.units.filter(u => u.team !== TEAM_BLUE).length;
+      const pCount = game.unitManager.getPlayerUnits(playerTeam).length;
+      const eCount = game.unitManager.units.filter(u => u.team !== playerTeam).length;
       infoHtml = `<h3>Global Command</h3><p>Tactical Overview:</p><p>• Friendly Forces: ${pCount}</p><p>• Enemy Presence: ${eCount}</p><p style="color:#555; margin-top:8px; font-style:italic">Select units or structures to issue commands.</p>`;
     } else {
       const typeCounts = {};
@@ -723,7 +805,25 @@ export class Renderer {
       });
     });
     const resEl = document.getElementById('resources');
-    resEl.innerHTML = `<div class="res-item"><div class="res-icon" style="background:#44ccff; box-shadow:0 0 5px #44ccff"></div><span>${res.minerals}</span></div><div class="res-item"><div class="res-icon" style="background:#8B6914; box-shadow:0 0 5px #8B6914"></div><span>${res.wood}</span></div>`;
+    const modeParts = difficultyLabel ? `${modeLabel} | ${difficultyLabel}` : modeLabel;
+    resEl.innerHTML = `<div class="res-item"><div class="res-icon" style="background:#44ccff; box-shadow:0 0 5px #44ccff"></div><span>${res.minerals}</span></div><div class="res-item"><div class="res-icon" style="background:#8B6914; box-shadow:0 0 5px #8B6914"></div><span>${res.wood}</span></div><div class="res-item"><span style="color:#72d5ff; font-size:11px; text-transform:uppercase; letter-spacing:0.5px">${modeParts}</span></div>`;
+
+    const unitCountsEl = document.getElementById('unit-counts');
+    if (unitCountsEl) {
+      const counts = {};
+      for (const u of game.unitManager.units) {
+        if (u.team !== playerTeam) continue;
+        counts[u.type] = (counts[u.type] || 0) + 1;
+      }
+      const order = ['worker', 'soldier', 'rocket', 'tank', 'bomber', 'battleship'];
+      unitCountsEl.innerHTML = order.map((type) => {
+        const def = UNIT_DEFS[type];
+        if (!def) return '';
+        const count = counts[type] || 0;
+        const icon = UNIT_COUNT_ICONS[type] || def.icon;
+        return `<span class="unit-count-item" title="${def.name}"><span class="u-icon">${icon}</span><span>${count}</span></span>`;
+      }).join('');
+    }
   }
 
   _makeBtn(label, icon, key, cost, action, disabled, tooltip = '') {

@@ -2,10 +2,15 @@
   "name": "micro-rts",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "node server/server.js",
     "build": "vite build",
     "preview": "vite preview"
+  },
+  "dependencies": {
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "vite": "^6.0.0"

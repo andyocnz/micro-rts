@@ -121,6 +121,7 @@ export class Unit {
     // Building
     this.buildTarget = null;  // reference to building being constructed
     this.buildTimer = 0;
+    this.buildQueue = []; // queued buildings to construct after current target
 
     // Visual
     this.animTimer = Math.random() * 2;
@@ -157,6 +158,10 @@ export class Unit {
         this._updateAttackingBuilding(dt, map);
         break;
       case 'idle':
+        if (this.buildQueue.length > 0) {
+          this._startNextQueuedBuild();
+          break;
+        }
         this._checkAggro(allUnits);
         break;
     }
@@ -460,7 +465,7 @@ export class Unit {
   _updateBuilding(dt, map) {
     if (!this.buildTarget || this.buildTarget.hp <= 0) {
       this.buildTarget = null;
-      this.state = 'idle';
+      this._startNextQueuedBuild();
       return;
     }
 
@@ -482,7 +487,7 @@ export class Unit {
         if (bld.buildProgress >= bld.buildTime) {
           bld.built = true;
           this.buildTarget = null;
-          this.state = 'idle';
+          this._startNextQueuedBuild();
         }
       }
     } else {
@@ -493,13 +498,39 @@ export class Unit {
         }
         if (this.path.length === 0) {
           this.buildTarget = null;
-          this.state = 'idle';
+          this._startNextQueuedBuild();
           return;
         }
       }
       this._updateMoving(dt, map);
       this.state = 'building';
     }
+  }
+
+  _startNextQueuedBuild() {
+    while (this.buildQueue.length > 0) {
+      const next = this.buildQueue.shift();
+      if (!next || next.hp <= 0 || next.built) continue;
+      next.constructionQueued = false;
+      this.buildTarget = next;
+      this.buildTimer = 0;
+      this.state = 'building';
+      this.target = null;
+      this.targetBld = null;
+      this.gatherTarget = null;
+      this.path = [];
+      return;
+    }
+    this.state = 'idle';
+  }
+
+  _clearBuildQueue(cancelQueuedVisual = true) {
+    if (cancelQueuedVisual) {
+      for (const b of this.buildQueue) {
+        if (b && !b.built) b.constructionQueued = false;
+      }
+    }
+    this.buildQueue = [];
   }
 
   _returnToBase(map, buildings) {
@@ -568,6 +599,7 @@ export class Unit {
       this.target = null;
       this.gatherTarget = null;
       this.buildTarget = null;
+      this._clearBuildQueue();
       return;
     }
     const pathFn = this.naval ? findPathWater : findPath;
@@ -578,6 +610,7 @@ export class Unit {
       this.target = null;
       this.gatherTarget = null;
       this.buildTarget = null;
+      this._clearBuildQueue();
     }
   }
 
@@ -588,6 +621,7 @@ export class Unit {
     this.path = [];
     this.gatherTarget = null;
     this.buildTarget = null;
+    this._clearBuildQueue();
   }
 
   attackBuilding(building, map) {
@@ -596,6 +630,7 @@ export class Unit {
     this.state = 'attackingBuilding';
     this.gatherTarget = null;
     this.buildTarget = null;
+    this._clearBuildQueue();
     this.path = [];
   }
 
@@ -605,14 +640,24 @@ export class Unit {
     this.state = 'gathering';
     this.target = null;
     this.buildTarget = null;
+    this._clearBuildQueue();
     this.path = [];
   }
 
   buildBuilding(building, map) {
+    if (this.buildTarget === building) return;
+    if (this.buildTarget && this.buildTarget !== building) {
+      if (this.buildQueue.includes(building)) return;
+      building.constructionQueued = true;
+      this.buildQueue.push(building);
+      return;
+    }
+    building.constructionQueued = false;
     this.buildTarget = building;
     this.buildTimer = 0;
     this.state = 'building';
     this.target = null;
+    this.targetBld = null;
     this.gatherTarget = null;
     this.path = [];
   }
@@ -623,6 +668,7 @@ export class Unit {
     this.target = null;
     this.gatherTarget = null;
     this.buildTarget = null;
+    this._clearBuildQueue();
   }
 
   containsScreenPoint(sx, sy, camera) {
