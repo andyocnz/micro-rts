@@ -28,11 +28,13 @@ export class InputManager {
 
   _setupListeners() {
     window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       this.keys.add(e.key.toLowerCase());
       if (e.key === 'Shift') this.shiftHeld = true;
     });
 
     window.addEventListener('keyup', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       this.keys.delete(e.key.toLowerCase());
       if (e.key === 'Shift') this.shiftHeld = false;
     });

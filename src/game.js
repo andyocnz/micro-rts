@@ -65,7 +65,9 @@ export class Game {
     window.addEventListener('keydown', (e) => this._onKeyDown(e));
 
     this.running = true;
+    this.paused = false;
     this.lastTime = 0;
+    this.gameTime = 0;
   }
 
   // --- Resource helpers ---
@@ -135,10 +137,12 @@ export class Game {
     const dt = Math.min((timestamp - this.lastTime) / 1000, 0.1);
     this.lastTime = timestamp;
 
-    this._handleInput();
-    this._update(dt);
-    this.renderer.updateMoveMarkers(dt);
-    this.renderer.updateParticles(dt);
+    if (!this.paused) {
+      this._handleInput();
+      this._update(dt);
+      this.renderer.updateMoveMarkers(dt);
+      this.renderer.updateParticles(dt);
+    }
     this.renderer.render(this);
 
     requestAnimationFrame((t) => this._loop(t));
@@ -250,6 +254,8 @@ export class Game {
     for (const ai of this.ais) {
       ai.update(dt, this);
     }
+
+    this.gameTime += dt;
 
     // Camera
     this.camera.update(dt, this.input.keys, this.input.mouseX, this.input.mouseY);
@@ -444,6 +450,9 @@ export class Game {
   }
 
   _onKeyDown(e) {
+    // Ignore game hotkeys when typing in input fields
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
     const key = e.key.toLowerCase();
 
     if (key === 'escape') {
@@ -573,5 +582,175 @@ export class Game {
       if (ux === tx && uy === ty) return true;
     }
     return false;
+  }
+
+  // --- Save / Load ---
+
+  saveToSlot(slotName) {
+    try {
+      const save = {
+        version: 1,
+        name: slotName,
+        timestamp: Date.now(),
+        seed: this.map.seed,
+        difficulty: this.difficulty,
+        gameTime: this.gameTime,
+        resources: this.resources,
+        camera: { x: this.camera.x, y: this.camera.y, zoom: this.camera.zoom },
+        mineralAmounts: Array.from(this.map.mineralAmounts.entries()),
+        woodAmounts: Array.from(this.map.woodAmounts.entries()),
+        mapTiles: Array.from(this.map.tiles),
+        buildings: this.buildingManager.buildings.map(b => ({
+          id: b.id, tileX: b.tileX, tileY: b.tileY, type: b.type, team: b.team,
+          hp: b.hp, built: b.built, buildProgress: b.buildProgress,
+          trainQueue: b.trainQueue.map(q => ({ type: q.type, timeLeft: q.timeLeft })),
+          rallyX: b.rallyX, rallyY: b.rallyY,
+        })),
+        units: this.unitManager.units.map(u => ({
+          type: u.type, team: u.team, x: u.x, y: u.y, hp: u.hp,
+          state: u.state, carrying: u.carrying, carryType: u.carryType,
+          gatherTarget: u.gatherTarget, buildTimer: u.buildTimer,
+          buildTargetId: u.buildTarget ? u.buildTarget.id : null,
+        })),
+        ai: this.ais.map(a => ({
+          team: a.team, timer: a.timer, waveTimer: a.waveTimer,
+          hasBuiltBarracks: a.hasBuiltBarracks,
+          hasBuiltFactory: a.hasBuiltFactory,
+          hasBuiltDock: a.hasBuiltDock,
+          towerCount: a.towerCount,
+        })),
+      };
+      localStorage.setItem('microRts_' + slotName, JSON.stringify(save));
+      // Update save index
+      const index = Game.getSaveIndex();
+      if (!index.includes(slotName)) index.push(slotName);
+      localStorage.setItem('microRts_index', JSON.stringify(index));
+      return true;
+    } catch (e) {
+      console.warn('Save failed:', e);
+      return false;
+    }
+  }
+
+  static getSaveIndex() {
+    try {
+      return JSON.parse(localStorage.getItem('microRts_index') || '[]');
+    } catch { return []; }
+  }
+
+  static getSaveList() {
+    const index = Game.getSaveIndex();
+    const saves = [];
+    for (const name of index) {
+      try {
+        const raw = localStorage.getItem('microRts_' + name);
+        if (!raw) continue;
+        const save = JSON.parse(raw);
+        const age = Date.now() - save.timestamp;
+        const mins = Math.floor(age / 60000);
+        const gameMin = Math.floor((save.gameTime || 0) / 60);
+        saves.push({ name, timestamp: save.timestamp, mins, gameMin, difficulty: save.difficulty });
+      } catch { /* skip corrupt */ }
+    }
+    saves.sort((a, b) => b.timestamp - a.timestamp);
+    return saves;
+  }
+
+  static deleteSave(slotName) {
+    localStorage.removeItem('microRts_' + slotName);
+    const index = Game.getSaveIndex().filter(n => n !== slotName);
+    localStorage.setItem('microRts_index', JSON.stringify(index));
+  }
+
+  loadFromSlot(slotName) {
+    try {
+      const raw = localStorage.getItem('microRts_' + slotName);
+      if (!raw) return false;
+      const save = JSON.parse(raw);
+      if (save.version !== 1) return false;
+
+      // Restore map from seed, then overwrite tiles and resource amounts
+      this.map = new GameMap(save.seed);
+      if (save.mapTiles) {
+        this.map.tiles = new Uint8Array(save.mapTiles);
+      }
+      this.map.mineralAmounts = new Map(save.mineralAmounts);
+      this.map.woodAmounts = new Map(save.woodAmounts);
+
+      // Restore resources
+      this.resources = save.resources;
+
+      // Restore difficulty
+      this.difficulty = save.difficulty;
+      for (const ai of this.ais) ai.setDifficulty(save.difficulty);
+
+      // Restore camera
+      this.camera.x = save.camera.x;
+      this.camera.y = save.camera.y;
+      this.camera.zoom = save.camera.zoom;
+
+      // Restore buildings
+      this.buildingManager.buildings = [];
+      for (const bd of save.buildings) {
+        const b = new Building(bd.tileX, bd.tileY, bd.type, bd.team);
+        b.id = bd.id;
+        b.hp = bd.hp;
+        b.built = bd.built;
+        b.buildProgress = bd.buildProgress;
+        b.trainQueue = bd.trainQueue || [];
+        if (bd.rallyX != null) { b.rallyX = bd.rallyX; b.rallyY = bd.rallyY; }
+        this.buildingManager.add(b);
+      }
+
+      // Restore units
+      this.unitManager.units = [];
+      for (const ud of save.units) {
+        const tileX = Math.floor(ud.x / TILE_SIZE);
+        const tileY = Math.floor(ud.y / TILE_SIZE);
+        const u = new Unit(tileX, tileY, ud.type, ud.team);
+        u.x = ud.x;
+        u.y = ud.y;
+        u.hp = ud.hp;
+        u.carrying = ud.carrying || 0;
+        u.carryType = ud.carryType || null;
+        u.gatherTarget = ud.gatherTarget || null;
+        u.buildTimer = ud.buildTimer || 0;
+        // Reconnect build targets
+        if (ud.buildTargetId != null) {
+          u.buildTarget = this.buildingManager.buildings.find(b => b.id === ud.buildTargetId) || null;
+          if (u.buildTarget) u.state = 'building';
+        }
+        // Workers gathering go back to gathering state
+        if (ud.state === 'gathering' && ud.gatherTarget) {
+          u.state = 'gathering';
+        } else if (ud.state === 'returning') {
+          u.state = 'returning';
+        } else {
+          u.state = 'idle';
+        }
+        this.unitManager.add(u);
+      }
+
+      // Restore AI state
+      if (save.ai) {
+        for (const aState of save.ai) {
+          const ai = this.ais.find(a => a.team === aState.team);
+          if (ai) {
+            ai.timer = aState.timer;
+            ai.waveTimer = aState.waveTimer;
+            ai.hasBuiltBarracks = aState.hasBuiltBarracks;
+            ai.hasBuiltFactory = aState.hasBuiltFactory;
+            ai.hasBuiltDock = aState.hasBuiltDock;
+            ai.towerCount = aState.towerCount;
+          }
+        }
+      }
+
+      this.gameTime = save.gameTime || 0;
+      return true;
+    } catch (e) {
+      console.warn('Load failed:', e);
+      return false;
+    }
   }
 }

@@ -22,10 +22,10 @@ export class Camera {
     let dx = 0, dy = 0;
 
     // Keyboard scrolling
-    if (keys.has('w') || keys.has('arrowup')) dy -= 1;
-    if (keys.has('s') || keys.has('arrowdown')) dy += 1;
-    if (keys.has('a') || keys.has('arrowleft')) dx -= 1;
-    if (keys.has('d') || keys.has('arrowright')) dx += 1;
+    if (keys.has('arrowup')) dy -= 1;
+    if (keys.has('arrowdown')) dy += 1;
+    if (keys.has('arrowleft')) dx -= 1;
+    if (keys.has('arrowright')) dx += 1;
 
     // Edge scrolling
     if (mouseX >= 0 && mouseY >= 0) {

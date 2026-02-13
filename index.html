@@ -184,19 +184,6 @@
       border-radius: 2px;
     }
 
-    #controls-hint {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      background: rgba(20, 20, 25, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 8px 12px;
-      color: #888;
-      font-size: 11px;
-      border-radius: 4px;
-      line-height: 1.6;
-    }
-
     #theme-selector {
       position: absolute;
       top: 12px;
@@ -266,6 +253,207 @@
     .diff-btn[data-diff="easy"].active { color: #4f4; border-color: #4f4; }
     .diff-btn[data-diff="normal"].active { color: #ff0; border-color: #ff0; }
     .diff-btn[data-diff="hard"].active { color: #f44; border-color: #f44; }
+
+    #save-indicator {
+      position: absolute;
+      top: 50px;
+      right: 12px;
+      background: rgba(20, 20, 25, 0.85);
+      border: 1px solid rgba(114, 213, 255, 0.4);
+      padding: 6px 14px;
+      color: #72d5ff;
+      font-size: 12px;
+      font-weight: bold;
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+      pointer-events: none;
+    }
+
+    #save-load-bar {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 6px;
+    }
+
+    .sl-btn {
+      padding: 6px 14px;
+      background: rgba(20, 20, 25, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #ccc;
+      font-size: 12px;
+      font-weight: bold;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .sl-btn:hover {
+      color: #fff;
+      border-color: #72d5ff;
+      background: rgba(30, 30, 40, 0.95);
+    }
+
+    #save-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #save-modal-overlay.open {
+      display: flex;
+    }
+
+    #save-modal {
+      background: #1a1a22;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 12px;
+      padding: 20px 24px;
+      min-width: 380px;
+      max-width: 480px;
+      color: #e0e0e0;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+    }
+
+    #save-modal h2 {
+      margin: 0 0 14px 0;
+      color: #72d5ff;
+      font-size: 18px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    #save-name-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    #save-name-input {
+      flex: 1;
+      padding: 8px 12px;
+      background: #0e0e14;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 4px;
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+    }
+
+    #save-name-input:focus {
+      border-color: #72d5ff;
+    }
+
+    #save-confirm-btn {
+      padding: 8px 18px;
+      background: #2a5a3a;
+      border: 1px solid #4a8;
+      border-radius: 4px;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    #save-confirm-btn:hover {
+      background: #3a7a4a;
+    }
+
+    #save-list {
+      max-height: 260px;
+      overflow-y: auto;
+      margin-bottom: 14px;
+    }
+
+    .save-entry {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 4px;
+      margin-bottom: 4px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .save-entry:hover {
+      background: rgba(114,213,255,0.1);
+      border-color: rgba(114,213,255,0.3);
+    }
+
+    .save-entry-info {
+      flex: 1;
+    }
+
+    .save-entry-name {
+      font-weight: bold;
+      font-size: 13px;
+      color: #fff;
+    }
+
+    .save-entry-detail {
+      font-size: 11px;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    .save-entry-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .save-entry-actions button {
+      padding: 4px 10px;
+      border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: transparent;
+      color: #aaa;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .save-entry-actions button:hover {
+      color: #fff;
+      border-color: #72d5ff;
+    }
+
+    .save-entry-actions .del-btn:hover {
+      color: #f55;
+      border-color: #f55;
+    }
+
+    .save-empty {
+      color: #666;
+      font-size: 12px;
+      text-align: center;
+      padding: 16px;
+    }
+
+    #modal-close-btn {
+      display: block;
+      margin: 0 auto;
+      padding: 6px 20px;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 4px;
+      color: #888;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    #modal-close-btn:hover {
+      color: #fff;
+      border-color: #72d5ff;
+    }
   </style>
 </head>
 
@@ -290,12 +478,20 @@
     <button class="diff-btn active" data-diff="normal">Normal</button>
     <button class="diff-btn" data-diff="hard">Hard</button>
   </div>
-  <div id="controls-hint">
-    WASD: Scroll | Scroll: Zoom<br>
-    Left Click: Select<br>
-    Right Click: Move/Attack/Gather<br>
-    Click Minimap: Jump camera<br>
-    B:Barracks F:Factory D:Def Tower N:Navy Dock H:HQ
+  <div id="save-load-bar">
+    <button class="sl-btn" id="btn-save">Save Game</button>
+    <button class="sl-btn" id="btn-load">Load Game</button>
+  </div>
+  <div id="save-modal-overlay">
+    <div id="save-modal">
+      <h2 id="modal-title">Save Game</h2>
+      <div id="save-name-row">
+        <input id="save-name-input" type="text" placeholder="Enter save name..." maxlength="40">
+        <button id="save-confirm-btn">Save</button>
+      </div>
+      <div id="save-list"></div>
+      <button id="modal-close-btn">Close</button>
+    </div>
   </div>
   <script type="module" src="/src/main.js"></script>
 </body>
