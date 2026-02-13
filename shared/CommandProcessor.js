@@ -35,6 +35,8 @@ export function processCommand(engine, playerTeam, command) {
       return processHarvest(engine, playerTeam, command);
     case 'BUILD':
       return processBuild(engine, playerTeam, command);
+    case 'BUILD_RESUME':
+      return processBuildResume(engine, playerTeam, command);
     case 'TRAIN':
       return processTrain(engine, playerTeam, command);
     case 'STOP':
@@ -120,6 +122,20 @@ function processBuild(engine, team, command) {
   engine.buildings.push(building);
   engine.spend(team, def.cost);
   builder.buildBuilding(building);
+  return true;
+}
+
+function processBuildResume(engine, team, command) {
+  const { buildingId } = command;
+  if (typeof buildingId !== 'number') return false;
+
+  const building = engine.getBuildingById(buildingId);
+  if (!building || building.team !== team || building.hp <= 0 || building.built) return false;
+
+  const units = getOwnedUnits(engine, team, command.unitIds).filter((u) => u.type === 'worker');
+  if (units.length === 0) return false;
+
+  for (const unit of units) unit.buildBuilding(building);
   return true;
 }
 

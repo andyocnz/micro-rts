@@ -205,6 +205,75 @@
     .theme-btn:hover { transform: scale(1.1); border-color: #72d5ff; }
     .theme-btn.active { border-color: #fff; box-shadow: 0 0 8px #fff; }
 
+    /* Mode tabs (Single Player / Multiplayer) */
+    .mode-tabs {
+      display: flex;
+      gap: 0;
+    }
+
+    .mode-tab {
+      flex: 1;
+      padding: 12px 0;
+      background: rgba(20, 20, 28, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #666;
+      font-size: 14px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .mode-tab:first-child { border-radius: 10px 0 0 0; }
+    .mode-tab:last-child { border-radius: 0 10px 0 0; }
+
+    .mode-tab.active {
+      background: rgba(20, 20, 28, 0.8);
+      color: #72d5ff;
+      border-color: rgba(114, 213, 255, 0.3);
+      border-bottom-color: transparent;
+    }
+
+    .mode-tab:hover:not(.active) { color: #aaa; background: rgba(20, 20, 28, 0.6); }
+
+    .mode-content {
+      display: none;
+    }
+
+    .mode-content.active { display: block; }
+
+    .mode-content > .menu-section {
+      border-top: none;
+      border-radius: 0 0 10px 10px;
+      margin-top: -1px;
+    }
+
+    /* Countdown overlay */
+    #countdown-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #countdown-number {
+      font-size: 120px;
+      font-weight: bold;
+      color: #fff;
+      text-shadow: 0 0 40px rgba(114, 213, 255, 0.8), 0 0 80px rgba(114, 213, 255, 0.4);
+      animation: countdown-pop 0.4s ease-out;
+    }
+
+    @keyframes countdown-pop {
+      0% { transform: scale(2); opacity: 0; }
+      50% { transform: scale(1.1); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
     /* Multiplayer tabs */
     .mp-tabs {
       display: flex;
@@ -817,85 +886,92 @@
       <div class="menu-subtitle">Minimalist Strategy Warfare</div>
 
       <div class="menu-section" id="resume-section" style="display:none">
-        <h3>Current Session</h3>
         <div class="menu-row">
           <button class="menu-btn primary" id="btn-resume-game">Resume Game</button>
         </div>
       </div>
 
+      <!-- Mode Tabs -->
+      <div class="mode-tabs">
+        <button class="mode-tab active" data-mode="single">Single Player</button>
+        <button class="mode-tab" data-mode="multi">Multiplayer</button>
+      </div>
+
       <!-- Single Player -->
-      <div class="menu-section">
-        <h3>Single Player</h3>
-        <div class="menu-row" style="justify-content:center; gap:10px;">
-          <button class="diff-btn menu-diff-btn" data-diff="easy">Easy</button>
-          <button class="diff-btn menu-diff-btn active" data-diff="normal">Normal</button>
-          <button class="diff-btn menu-diff-btn" data-diff="hard">Hard</button>
-        </div>
-        <div class="menu-row">
-          <button class="menu-btn primary" id="btn-new-game">New Game</button>
-          <button class="menu-btn" id="btn-load-game">Load Game</button>
+      <div class="mode-content active" id="mode-single">
+        <div class="menu-section">
+          <div class="menu-row" style="justify-content:center; gap:10px;">
+            <button class="diff-btn menu-diff-btn" data-diff="easy">Easy</button>
+            <button class="diff-btn menu-diff-btn active" data-diff="normal">Normal</button>
+            <button class="diff-btn menu-diff-btn" data-diff="hard">Hard</button>
+          </div>
+          <div class="menu-row">
+            <button class="menu-btn primary" id="btn-new-game">New Game</button>
+            <button class="menu-btn" id="btn-load-game">Load Game</button>
+          </div>
         </div>
       </div>
 
       <!-- Multiplayer -->
-      <div class="menu-section">
-        <h3>Multiplayer</h3>
-        <div class="player-identity">
-          <select class="icon-select" id="player-icon">
-            <option value="⚔️">⚔️</option>
-            <option value="🛡️">🛡️</option>
-            <option value="🏰">🏰</option>
-            <option value="🐉">🐉</option>
-            <option value="🦅">🦅</option>
-            <option value="🐺">🐺</option>
-            <option value="🔥">🔥</option>
-            <option value="⚡">⚡</option>
-            <option value="💀">💀</option>
-            <option value="👑">👑</option>
-            <option value="🎯">🎯</option>
-            <option value="🚀">🚀</option>
-          </select>
-          <input class="name-input" id="player-name" maxlength="12" placeholder="Your name..." value="">
-        </div>
-        <div id="net-status" class="menu-info">Not connected</div>
+      <div class="mode-content" id="mode-multi">
+        <div class="menu-section">
+          <div class="player-identity">
+            <select class="icon-select" id="player-icon">
+              <option value="⚔️">⚔️</option>
+              <option value="🛡️">🛡️</option>
+              <option value="🏰">🏰</option>
+              <option value="🐉">🐉</option>
+              <option value="🦅">🦅</option>
+              <option value="🐺">🐺</option>
+              <option value="🔥">🔥</option>
+              <option value="⚡">⚡</option>
+              <option value="💀">💀</option>
+              <option value="👑">👑</option>
+              <option value="🎯">🎯</option>
+              <option value="🚀">🚀</option>
+            </select>
+            <input class="name-input" id="player-name" maxlength="12" placeholder="Your name..." value="">
+          </div>
+          <div id="net-status" class="menu-info">Not connected</div>
 
-        <div class="mp-tabs">
-          <button class="mp-tab active" data-tab="join">Join Game</button>
-          <button class="mp-tab" data-tab="create">Create Game</button>
-        </div>
+          <div class="mp-tabs">
+            <button class="mp-tab active" data-tab="join">Join Game</button>
+            <button class="mp-tab" data-tab="create">Create Game</button>
+          </div>
 
-        <!-- Join tab -->
-        <div class="mp-tab-content active" id="tab-join">
-          <div class="menu-row">
-            <input class="menu-input" id="room-code-input" maxlength="5" placeholder="ROOM CODE">
-            <button class="menu-btn primary" id="btn-join-room">Join</button>
+          <!-- Join tab -->
+          <div class="mp-tab-content active" id="tab-join">
+            <div class="menu-row">
+              <input class="menu-input" id="room-code-input" maxlength="5" placeholder="ROOM CODE">
+              <button class="menu-btn primary" id="btn-join-room">Join</button>
+            </div>
           </div>
-        </div>
 
-        <!-- Create tab -->
-        <div class="mp-tab-content" id="tab-create">
-          <div class="menu-row">
-            <button class="menu-btn primary" id="btn-create-room">Create Room</button>
+          <!-- Create tab -->
+          <div class="mp-tab-content" id="tab-create">
+            <div class="menu-row">
+              <button class="menu-btn primary" id="btn-create-room">Create Room</button>
+            </div>
           </div>
-        </div>
 
-        <!-- Room info (shown after joining/creating) -->
-        <div id="mp-room-info" style="display:none">
-          <div class="room-code-row">
-            <span class="room-code-value" id="room-code-display">-----</span>
-            <button class="copy-btn" id="btn-copy-code">Copy</button>
-            <span id="slot-display" style="color:#666; font-size:11px; margin-left:auto;">Slot: -</span>
+          <!-- Room info (shown after joining/creating) -->
+          <div id="mp-room-info" style="display:none">
+            <div class="room-code-row">
+              <span class="room-code-value" id="room-code-display">-----</span>
+              <button class="copy-btn" id="btn-copy-code">Copy</button>
+              <span id="slot-display" style="color:#666; font-size:11px; margin-left:auto;">Slot: -</span>
+            </div>
+            <div id="player-list"></div>
+            <div class="menu-row" style="margin-top:8px;">
+              <button class="menu-btn primary" id="btn-start-mp" disabled>Start Game</button>
+            </div>
+            <div class="menu-row">
+              <button class="menu-btn" id="btn-pause-mp" disabled>Pause</button>
+              <button class="menu-btn" id="btn-save-mp" disabled>Save</button>
+              <button class="menu-btn" id="btn-load-mp" disabled>Load</button>
+            </div>
+            <div class="menu-info" id="mp-pause-state"></div>
           </div>
-          <div id="player-list"></div>
-          <div class="menu-row" style="margin-top:8px;">
-            <button class="menu-btn primary" id="btn-start-mp" disabled>Start Game</button>
-          </div>
-          <div class="menu-row">
-            <button class="menu-btn" id="btn-pause-mp" disabled>Pause</button>
-            <button class="menu-btn" id="btn-save-mp" disabled>Save</button>
-            <button class="menu-btn" id="btn-load-mp" disabled>Load</button>
-          </div>
-          <div class="menu-info" id="mp-pause-state"></div>
         </div>
       </div>
 
@@ -907,6 +983,11 @@
         <div class="theme-btn" data-theme="frozen" style="background: #eefaff;" title="Frozen"></div>
       </div>
     </div>
+  </div>
+
+  <!-- ===== COUNTDOWN OVERLAY ===== -->
+  <div id="countdown-overlay" style="display:none">
+    <div id="countdown-number"></div>
   </div>
 
   <!-- ===== GAME UI (shown during gameplay) ===== -->

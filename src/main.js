@@ -1,6 +1,7 @@
 import { Game } from './game.js';
 import { MultiplayerGame } from './multiplayerGame.js';
 import { NetworkClient } from './network.js';
+import { sfxCountdownTick, sfxCountdownGo } from './audio.js';
 
 const STORAGE_KEY = 'micro_rts_session_v1';
 const TEAM_NAMES = ['Blue', 'Red', 'Green', 'Yellow'];
@@ -411,6 +412,29 @@ function bindNetworkHandlers() {
         break;
       }
 
+      case 'COUNTDOWN': {
+        const overlay = document.getElementById('countdown-overlay');
+        const numEl = document.getElementById('countdown-number');
+        if (msg.count > 0) {
+          numEl.textContent = msg.count;
+          // Re-trigger animation
+          numEl.style.animation = 'none';
+          numEl.offsetHeight; // force reflow
+          numEl.style.animation = '';
+          overlay.style.display = 'flex';
+          sfxCountdownTick();
+          setStatus(`Starting in ${msg.count}...`);
+        } else {
+          numEl.textContent = 'GO!';
+          numEl.style.animation = 'none';
+          numEl.offsetHeight;
+          numEl.style.animation = '';
+          sfxCountdownGo();
+          setTimeout(() => { overlay.style.display = 'none'; }, 600);
+        }
+        break;
+      }
+
       case 'GAME_STARTED': {
         roomStatus = 'RUNNING';
         roomPaused = false;
@@ -432,14 +456,27 @@ function bindNetworkHandlers() {
         setStatus(`Room ${msg.roomCode} is full`);
         break;
       case 'ROOM_NOT_FOUND':
-        setStatus(`Room ${msg.roomCode || ''} not found`);
+        clearSession();
+        if (pendingNetworkAction) {
+          const action = pendingNetworkAction;
+          pendingNetworkAction = null;
+          action();
+        } else {
+          setStatus(`Room ${msg.roomCode || ''} not found`);
+        }
         break;
       case 'ROOM_ALREADY_STARTED':
         setStatus(`Room ${msg.roomCode} already started`);
         break;
       case 'REJOIN_REJECTED':
         clearSession();
-        setStatus('Rejoin rejected, create or join room');
+        if (pendingNetworkAction) {
+          const action = pendingNetworkAction;
+          pendingNetworkAction = null;
+          action();
+        } else {
+          setStatus('Rejoin rejected, create or join room');
+        }
         break;
 
       case 'PLAYER_DISCONNECTED':
@@ -606,6 +643,14 @@ function init() {
 
   resize();
   window.addEventListener('resize', resize);
+
+  // --- Mode tabs (Single Player / Multiplayer) ---
+  document.querySelectorAll('.mode-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.mode-tab').forEach(t => t.classList.toggle('active', t === tab));
+      document.querySelectorAll('.mode-content').forEach(c => c.classList.toggle('active', c.id === `mode-${tab.dataset.mode}`));
+    });
+  });
 
   // --- Multiplayer tabs ---
   document.querySelectorAll('.mp-tab').forEach(tab => {

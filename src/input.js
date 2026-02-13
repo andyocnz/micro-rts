@@ -54,6 +54,10 @@ export class InputManager {
         this.isSelecting = true;
         this.selBoxStart = { x: e.clientX, y: e.clientY };
         this.selBoxEnd = { x: e.clientX, y: e.clientY };
+      } else if (e.button === 2) {
+        // Right click command should not depend on contextmenu timing.
+        e.preventDefault();
+        this.rightClick = { x: e.clientX, y: e.clientY };
       }
     });
 
@@ -88,6 +92,10 @@ export class InputManager {
         this.isSelecting = false;
         this.selBoxStart = null;
         this.selBoxEnd = null;
+      } else if (e.button === 2) {
+        // Keep as backup path on browsers that delay/suppress mousedown button 2.
+        e.preventDefault();
+        this.rightClick = { x: e.clientX, y: e.clientY };
       }
     });
 

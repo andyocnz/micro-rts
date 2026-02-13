@@ -53,12 +53,26 @@ export class Unit {
     this.animTimer = Math.random() * 2;
     this.lastAttackTime = 999;
     this.lastAttackTarget = null;
+
+    // Stuck recovery state (ported from singleplayer)
+    this._stuckTimer = 0;
+    this._stuckJittered = false;
+    this._lastX = this.x;
+    this._lastY = this.y;
+
+    // Command lock prevents auto-aggro after explicit move orders
+    this.commandLockTimer = 0;
+
+    // Repathing cooldown to avoid thrashing
+    this._repathCooldown = 0;
   }
 
   update(dt, map, allUnits, buildings) {
     this.animTimer += dt;
     this.lastAttackTime += dt;
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
+    this.commandLockTimer = Math.max(0, this.commandLockTimer - dt);
+    this._repathCooldown = Math.max(0, this._repathCooldown - dt);
 
     switch (this.state) {
       case 'moving':
@@ -88,9 +102,63 @@ export class Unit {
 
     this.tileX = Math.floor(this.x / TILE_SIZE);
     this.tileY = Math.floor(this.y / TILE_SIZE);
+    this._updateStuckRecovery(dt, map);
+  }
+
+  _updateStuckRecovery(dt, map) {
+    const activeState = this.state === 'moving' ||
+      this.state === 'gathering' ||
+      this.state === 'returning' ||
+      this.state === 'building' ||
+      this.state === 'attacking' ||
+      this.state === 'attackingBuilding';
+    if (!activeState) {
+      this._stuckTimer = 0;
+      this._stuckJittered = false;
+      this._lastX = this.x;
+      this._lastY = this.y;
+      return;
+    }
+
+    const dx = this.x - this._lastX;
+    const dy = this.y - this._lastY;
+    const moved = Math.sqrt(dx * dx + dy * dy);
+    this._lastX = this.x;
+    this._lastY = this.y;
+
+    if (moved < 0.12) {
+      this._stuckTimer += dt;
+    } else {
+      this._stuckTimer = 0;
+      this._stuckJittered = false;
+    }
+
+    // Phase 1: Jitter - random displacement to break deadlocks
+    if (this._stuckTimer > 0.8 && !this._stuckJittered) {
+      const angle = Math.random() * Math.PI * 2;
+      const jitterDist = TILE_SIZE * 0.4;
+      const newX = this.x + Math.cos(angle) * jitterDist;
+      const newY = this.y + Math.sin(angle) * jitterDist;
+      const tx = Math.floor(newX / TILE_SIZE);
+      const ty = Math.floor(newY / TILE_SIZE);
+      const valid = this.flying || (this.naval ? map.isSwimmable(tx, ty) : map.isWalkable(tx, ty));
+      if (valid) {
+        this.x = newX;
+        this.y = newY;
+      }
+      this._stuckJittered = true;
+    }
+
+    // Phase 2: Clear path and force re-evaluation
+    if (this._stuckTimer > 1.5) {
+      this.path = [];
+      this._stuckTimer = 0;
+      this._stuckJittered = false;
+    }
   }
 
   _checkAggro(allUnits) {
+    if (this.commandLockTimer > 0) return;
     if (this.type === 'worker') return;
     const aggroDistPx = AGGRO_RANGE * TILE_SIZE;
     let closest = null;
@@ -127,7 +195,7 @@ export class Unit {
     const dy = targetY - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (dist < 2) {
+    if (dist < 4) {
       this.x = targetX;
       this.y = targetY;
       this.path.shift();
@@ -168,13 +236,37 @@ export class Unit {
       return;
     }
 
-    if (this.path.length === 0 || this.animTimer % 1.0 < dt) {
-      const ttx = Math.floor(this.target.x / TILE_SIZE);
-      const tty = Math.floor(this.target.y / TILE_SIZE);
-      this.path = this.flying ? [{ x: ttx, y: tty }] : (this.naval ? findPathWater(map, this.tileX, this.tileY, ttx, tty) : findPath(map, this.tileX, this.tileY, ttx, tty));
-    }
+    // Close range: walk directly toward target (ported from singleplayer)
+    const ttx = Math.floor(this.target.x / TILE_SIZE);
+    const tty = Math.floor(this.target.y / TILE_SIZE);
+    const tileDist = Math.abs(ttx - this.tileX) + Math.abs(tty - this.tileY);
 
-    this._updateMoving(dt);
+    if (!this.naval && !this.flying && tileDist <= 4 && this.path.length === 0) {
+      if (dist > 0.1) {
+        const newX = this.x + (dx / dist) * this.speed * dt;
+        const newY = this.y + (dy / dist) * this.speed * dt;
+        const ntx = Math.floor(newX / TILE_SIZE);
+        const nty = Math.floor(newY / TILE_SIZE);
+        if (map.isWalkable(ntx, nty)) {
+          this.x = newX;
+          this.y = newY;
+        }
+      }
+    } else {
+      // Far away: use A* pathfinding with cooldown
+      const needsRepath = (this.path.length === 0 && this._repathCooldown <= 0) || this.animTimer % 1.0 < dt;
+      if (needsRepath) {
+        if (this.flying) {
+          this.path = [{ x: ttx, y: tty }];
+        } else if (this.naval) {
+          this.path = findPathWater(map, this.tileX, this.tileY, ttx, tty);
+        } else {
+          this.path = findPath(map, this.tileX, this.tileY, ttx, tty);
+        }
+        if (this.path.length === 0) this._repathCooldown = 0.5;
+      }
+      this._updateMoving(dt);
+    }
     this.state = 'attacking';
   }
 
@@ -207,7 +299,8 @@ export class Unit {
       return;
     }
 
-    if (this.path.length === 0 || this.animTimer % 1.0 < dt) {
+    const needsRepath = (this.path.length === 0 && this._repathCooldown <= 0) || this.animTimer % 1.0 < dt;
+    if (needsRepath) {
       const bx = Math.floor(bld.x / TILE_SIZE);
       const by = Math.floor(bld.y / TILE_SIZE);
       if (this.flying) {
@@ -218,6 +311,7 @@ export class Unit {
         const adj = this._findAdjacentWalkable(map, bx, by);
         this.path = adj ? findPath(map, this.tileX, this.tileY, adj.x, adj.y) : [];
       }
+      if (this.path.length === 0) this._repathCooldown = 0.5;
     }
 
     this._updateMoving(dt);
@@ -441,6 +535,7 @@ export class Unit {
       this.targetBld = null;
       this.gatherTarget = null;
       this.buildTarget = null;
+      this.commandLockTimer = 1.25;
     }
   }
 
@@ -451,6 +546,7 @@ export class Unit {
     this.path = [];
     this.gatherTarget = null;
     this.buildTarget = null;
+    this.commandLockTimer = 0;
   }
 
   attackBuilding(building) {
@@ -460,6 +556,7 @@ export class Unit {
     this.path = [];
     this.gatherTarget = null;
     this.buildTarget = null;
+    this.commandLockTimer = 0;
   }
 
   gatherFrom(tileX, tileY) {
@@ -543,9 +640,15 @@ export class Unit {
   }
 }
 
-export function applyUnitSeparation(units, dt) {
+export function applyUnitSeparation(units, dt, map) {
   const sepRadius = 14.4;
   const sepForce = 120;
+
+  const isValidPos = (unit, px, py) => {
+    const tx = Math.floor(px / TILE_SIZE);
+    const ty = Math.floor(py / TILE_SIZE);
+    return unit.naval ? map.isSwimmable(tx, ty) : (unit.flying || map.isWalkable(tx, ty));
+  };
 
   for (let i = 0; i < units.length; i++) {
     const a = units[i];
@@ -560,14 +663,70 @@ export function applyUnitSeparation(units, dt) {
         const overlap = (sepRadius - dist) / sepRadius;
         const pushX = (dx / dist) * overlap * sepForce * dt;
         const pushY = (dy / dist) * overlap * sepForce * dt;
-        const aMoving = a.state === 'moving' || a.state === 'attacking' || a.state === 'attackingBuilding';
-        const bMoving = b.state === 'moving' || b.state === 'attacking' || b.state === 'attackingBuilding';
-        const aWeight = aMoving ? 0.3 : 0.7;
-        const bWeight = bMoving ? 0.3 : 0.7;
-        a.x -= pushX * aWeight;
-        a.y -= pushY * aWeight;
-        b.x += pushX * bWeight;
-        b.y += pushY * bWeight;
+        // Asymmetric: moving units push idle units aside
+        const aHasPath = a.path && a.path.length > 0;
+        const bHasPath = b.path && b.path.length > 0;
+        let aWeight, bWeight;
+        if (aHasPath && !bHasPath) {
+          aWeight = 0.15; bWeight = 0.85;
+        } else if (!aHasPath && bHasPath) {
+          aWeight = 0.85; bWeight = 0.15;
+        } else if (aHasPath && bHasPath) {
+          aWeight = 0.35; bWeight = 0.35;
+        } else {
+          aWeight = 0.5; bWeight = 0.5;
+        }
+        const newAx = a.x - pushX * aWeight;
+        const newAy = a.y - pushY * aWeight;
+        const newBx = b.x + pushX * bWeight;
+        const newBy = b.y + pushY * bWeight;
+        if (map && isValidPos(a, newAx, newAy)) { a.x = newAx; a.y = newAy; }
+        else if (!map) { a.x = newAx; a.y = newAy; }
+        if (map && isValidPos(b, newBx, newBy)) { b.x = newBx; b.y = newBy; }
+        else if (!map) { b.x = newBx; b.y = newBy; }
+      } else if (dist <= 0.1) {
+        // Nearly exact overlap — nudge randomly
+        const angle = Math.random() * Math.PI * 2;
+        const nudge = sepRadius * 0.5;
+        const newAx = a.x - Math.cos(angle) * nudge;
+        const newAy = a.y - Math.sin(angle) * nudge;
+        const newBx = b.x + Math.cos(angle) * nudge;
+        const newBy = b.y + Math.sin(angle) * nudge;
+        if (map && isValidPos(a, newAx, newAy)) { a.x = newAx; a.y = newAy; }
+        else if (!map) { a.x = newAx; a.y = newAy; }
+        if (map && isValidPos(b, newBx, newBy)) { b.x = newBx; b.y = newBy; }
+        else if (!map) { b.x = newBx; b.y = newBy; }
+      }
+    }
+  }
+
+  // Recovery: snap units stuck on invalid tiles back to nearest valid tile
+  if (map) {
+    for (const unit of units) {
+      if (unit.flying) continue;
+      const tx = Math.floor(unit.x / TILE_SIZE);
+      const ty = Math.floor(unit.y / TILE_SIZE);
+      const valid = unit.naval ? map.isSwimmable(tx, ty) : map.isWalkable(tx, ty);
+      if (!valid) {
+        for (let r = 1; r <= 5; r++) {
+          let found = false;
+          for (let dy = -r; dy <= r && !found; dy++) {
+            for (let dx = -r; dx <= r && !found; dx++) {
+              if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+              const nx = tx + dx;
+              const ny = ty + dy;
+              const ok = unit.naval ? map.isSwimmable(nx, ny) : map.isWalkable(nx, ny);
+              if (ok) {
+                unit.x = nx * TILE_SIZE + TILE_SIZE / 2;
+                unit.y = ny * TILE_SIZE + TILE_SIZE / 2;
+                unit.tileX = nx;
+                unit.tileY = ny;
+                found = true;
+              }
+            }
+          }
+          if (found) break;
+        }
       }
     }
   }

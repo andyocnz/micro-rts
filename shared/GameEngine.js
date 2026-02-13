@@ -119,7 +119,7 @@ export class GameEngine {
       unit.update(dt, this.map, this.units, this.buildings);
     }
 
-    applyUnitSeparation(this.units, dt);
+    applyUnitSeparation(this.units, dt, this.map);
 
     for (const unit of this.units) {
       if (unit._onDeposit) {

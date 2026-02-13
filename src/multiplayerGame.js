@@ -40,6 +40,11 @@ export class MultiplayerGame {
     this.running = true;
     this.lastTime = 0;
 
+    // Client-side fog of war
+    this.fogEnabled = true;
+    this.fogVisible = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
+    this.fogExplored = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
+
     window.addEventListener('keydown', (e) => this._onKeyDown(e));
   }
 
@@ -66,6 +71,7 @@ export class MultiplayerGame {
       this.status = 'ENDED';
     }
 
+    this._recomputeFog();
     this.renderer.minimapDirty = true;
   }
 
@@ -134,7 +140,9 @@ export class MultiplayerGame {
       for (const [type, def] of Object.entries(BUILDING_DEFS)) {
         const hotkey = type === 'base' ? 'h' : type === 'barracks' ? 'b' : type === 'factory' ? 'f' : type === 'tower' ? 'd' : type === 'dock' ? 'n' : null;
         if (hotkey === key) {
-          this.buildMode = type;
+          if (this.canAfford(this.localPlayerTeam, def.cost)) {
+            this.buildMode = type;
+          }
           return;
         }
       }
@@ -153,6 +161,28 @@ export class MultiplayerGame {
   }
 
   _handleInput() {
+    // Minimap right-click should issue move command, not camera jump.
+    const peekRight = this.input.rightClick;
+    if (peekRight) {
+      const mmWorldR = this.renderer.screenToMinimapWorld(peekRight.x, peekRight.y);
+      if (mmWorldR) {
+        this.input.consumeRightClick();
+        const selected = this.unitManager.getSelected().filter((u) => u.team === this.localPlayerTeam);
+        if (selected.length > 0) {
+          const tx = Math.max(0, Math.min(MAP_WIDTH - 1, Math.floor(mmWorldR.worldX / TILE_SIZE)));
+          const ty = Math.max(0, Math.min(MAP_HEIGHT - 1, Math.floor(mmWorldR.worldY / TILE_SIZE)));
+          this.network.sendCommand({ type: 'MOVE', unitIds: selected.map((u) => u.id), target: { x: tx, y: ty } });
+          this.renderer.addMoveMarker(tx * TILE_SIZE + TILE_SIZE / 2, ty * TILE_SIZE + TILE_SIZE / 2);
+        }
+        const peekLeftAfter = this.input.leftClick;
+        if (peekLeftAfter && !peekLeftAfter.box) {
+          const mmWorldL = this.renderer.screenToMinimapWorld(peekLeftAfter.x, peekLeftAfter.y);
+          if (mmWorldL) this.input.consumeLeftClick();
+        }
+        return;
+      }
+    }
+
     const peekLeft = this.input.leftClick;
     if (peekLeft && !peekLeft.box) {
       const mmWorld = this.renderer.screenToMinimapWorld(peekLeft.x, peekLeft.y);
@@ -224,9 +254,18 @@ export class MultiplayerGame {
     const selected = this.unitManager.getSelected().filter((u) => u.team === this.localPlayerTeam);
     if (selected.length === 0) return;
 
-    const worldPos = this.camera.screenToWorld(rightClick.x, rightClick.y);
+    const mmWorld = this.renderer.screenToMinimapWorld(rightClick.x, rightClick.y);
+    const worldPos = mmWorld || this.camera.screenToWorld(rightClick.x, rightClick.y);
     const tileX = Math.floor(worldPos.x / TILE_SIZE);
     const tileY = Math.floor(worldPos.y / TILE_SIZE);
+
+    if (mmWorld) {
+      const tx = Math.max(0, Math.min(MAP_WIDTH - 1, tileX));
+      const ty = Math.max(0, Math.min(MAP_HEIGHT - 1, tileY));
+      this.network.sendCommand({ type: 'MOVE', unitIds: selected.map((u) => u.id), target: { x: tx, y: ty } });
+      this.renderer.addMoveMarker(tx * TILE_SIZE + TILE_SIZE / 2, ty * TILE_SIZE + TILE_SIZE / 2);
+      return;
+    }
 
     const targetUnit = this.unitManager.getUnitAtScreen(rightClick.x, rightClick.y, this.camera);
     const targetBuilding = this.buildingManager.getBuildingAtScreen(rightClick.x, rightClick.y, this.camera);
@@ -239,6 +278,14 @@ export class MultiplayerGame {
     if (targetBuilding && targetBuilding.team !== this.localPlayerTeam) {
       this.network.sendCommand({ type: 'ATTACK', unitIds: selected.map((u) => u.id), targetBuildingId: targetBuilding.id });
       return;
+    }
+
+    if (targetBuilding && targetBuilding.team === this.localPlayerTeam && !targetBuilding.built) {
+      const workers = selected.filter((u) => u.type === 'worker').map((u) => u.id);
+      if (workers.length > 0) {
+        this.network.sendCommand({ type: 'BUILD_RESUME', unitIds: workers, buildingId: targetBuilding.id });
+        return;
+      }
     }
 
     if (this.map.getTile(tileX, tileY) === TILE_MINERAL || this.map.getTile(tileX, tileY) === TILE_TREE) {
@@ -267,7 +314,11 @@ export class MultiplayerGame {
     }
 
     if (action.startsWith('build:')) {
-      this.buildMode = action.split(':')[1];
+      const type = action.split(':')[1];
+      const def = BUILDING_DEFS[type];
+      if (def && this.canAfford(this.localPlayerTeam, def.cost)) {
+        this.buildMode = type;
+      }
       return;
     }
 
@@ -276,6 +327,83 @@ export class MultiplayerGame {
       const buildingId = Number(buildingIdStr);
       this.network.sendCommand({ type: 'TRAIN', buildingId, unitType });
     }
+  }
+
+  canAfford(team, cost) {
+    const res = this.resources[team];
+    if (!res) return false;
+    return res.minerals >= (cost.minerals || 0) && res.wood >= (cost.wood || 0);
+  }
+
+  isHostile(teamA, teamB) { return teamA !== teamB; }
+
+  _tileIndex(tx, ty) {
+    return ty * MAP_WIDTH + tx;
+  }
+
+  _markVisionCircle(cx, cy, radiusTiles) {
+    const r2 = radiusTiles * radiusTiles;
+    const minX = Math.max(0, cx - radiusTiles);
+    const maxX = Math.min(MAP_WIDTH - 1, cx + radiusTiles);
+    const minY = Math.max(0, cy - radiusTiles);
+    const maxY = Math.min(MAP_HEIGHT - 1, cy + radiusTiles);
+
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const dx = x - cx;
+        const dy = y - cy;
+        if (dx * dx + dy * dy <= r2) {
+          const i = this._tileIndex(x, y);
+          this.fogVisible[i] = 1;
+          this.fogExplored[i] = 1;
+        }
+      }
+    }
+  }
+
+  _recomputeFog() {
+    if (!this.fogEnabled) {
+      this.fogVisible.fill(1);
+      this.fogExplored.fill(1);
+      return;
+    }
+
+    this.fogVisible.fill(0);
+
+    const unitVision = { worker: 8, soldier: 10, tank: 11, rocket: 11, bomber: 13, battleship: 14 };
+    const buildingVision = { base: 12, barracks: 10, factory: 10, dock: 12, tower: 14 };
+
+    for (const u of this.unitManager.units) {
+      if (u.team !== this.localPlayerTeam || u.hp <= 0) continue;
+      const tx = Math.floor(u.x / TILE_SIZE);
+      const ty = Math.floor(u.y / TILE_SIZE);
+      this._markVisionCircle(tx, ty, unitVision[u.type] || 6);
+    }
+
+    for (const b of this.buildingManager.buildings) {
+      if (b.team !== this.localPlayerTeam || b.hp <= 0) continue;
+      const tx = Math.floor(b.x / TILE_SIZE);
+      const ty = Math.floor(b.y / TILE_SIZE);
+      this._markVisionCircle(tx, ty, buildingVision[b.type] || 7);
+    }
+  }
+
+  isTileVisible(tx, ty) {
+    if (!this.fogEnabled) return true;
+    if (tx < 0 || ty < 0 || tx >= MAP_WIDTH || ty >= MAP_HEIGHT) return false;
+    return this.fogVisible[this._tileIndex(tx, ty)] === 1;
+  }
+
+  isTileExplored(tx, ty) {
+    if (!this.fogEnabled) return true;
+    if (tx < 0 || ty < 0 || tx >= MAP_WIDTH || ty >= MAP_HEIGHT) return false;
+    return this.fogExplored[this._tileIndex(tx, ty)] === 1;
+  }
+
+  isWorldVisible(wx, wy) {
+    const tx = Math.floor(wx / TILE_SIZE);
+    const ty = Math.floor(wy / TILE_SIZE);
+    return this.isTileVisible(tx, ty);
   }
 
   switchTheme(theme) {

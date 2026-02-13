@@ -140,6 +140,16 @@ export function sfxError() {
   setTimeout(() => playTone(150, 0.15, 'square', 0.1), 120);
 }
 
+export function sfxCountdownTick() {
+  playTone(600, 0.12, 'sine', 0.2, true);
+}
+
+export function sfxCountdownGo() {
+  playTone(800, 0.1, 'sine', 0.2, false);
+  setTimeout(() => playTone(1000, 0.1, 'sine', 0.18, false), 80);
+  setTimeout(() => playTone(1200, 0.15, 'sine', 0.15), 160);
+}
+
 export function sfxExplosion(wx, wy) {
   if (!canPlayAt(wx, wy)) return;
   playNoise(0.2, 0.2);

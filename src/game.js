@@ -305,6 +305,58 @@ export class Game {
   _handleInput() {
     if (this.ended) return;
 
+    // Minimap right-click should issue move command, not camera jump.
+    const peekRight = this.input.rightClick;
+    if (peekRight) {
+      const mmWorldR = this.renderer.screenToMinimapWorld(peekRight.x, peekRight.y);
+      if (mmWorldR) {
+        this.input.consumeRightClick();
+        const selected = this.unitManager.getSelected();
+        if (selected.length > 0) {
+          const tileX = Math.floor(mmWorldR.worldX / TILE_SIZE);
+          const tileY = Math.floor(mmWorldR.worldY / TILE_SIZE);
+          const clampedX = Math.max(0, Math.min(MAP_WIDTH - 1, tileX));
+          const clampedY = Math.max(0, Math.min(MAP_HEIGHT - 1, tileY));
+
+          const landSelected = selected.filter(u => !u.naval);
+          const navalSelected = selected.filter(u => u.naval);
+          const cols = Math.max(1, Math.ceil(Math.sqrt(Math.max(1, landSelected.length))));
+
+          for (let i = 0; i < landSelected.length; i++) {
+            const offsetX = (i % cols) - Math.floor(cols / 2);
+            const offsetY = Math.floor(i / cols) - Math.floor(landSelected.length / cols / 2);
+            let tx = Math.max(0, Math.min(MAP_WIDTH - 1, clampedX + offsetX));
+            let ty = Math.max(0, Math.min(MAP_HEIGHT - 1, clampedY + offsetY));
+            if (!this.map.isWalkable(tx, ty)) {
+              tx = clampedX;
+              ty = clampedY;
+            }
+            landSelected[i].moveTo(this.map, tx, ty);
+          }
+          for (const u of navalSelected) {
+            if (this.map.isSwimmable(clampedX, clampedY)) {
+              u.moveTo(this.map, clampedX, clampedY);
+            }
+          }
+
+          if (landSelected.length > 0 || navalSelected.length > 0) {
+            sfxMove();
+            this.renderer.addMoveMarker(
+              clampedX * TILE_SIZE + TILE_SIZE / 2,
+              clampedY * TILE_SIZE + TILE_SIZE / 2
+            );
+          }
+        }
+        // Swallow any simultaneous minimap left-click that could center camera.
+        const peekLeftAfter = this.input.leftClick;
+        if (peekLeftAfter && !peekLeftAfter.box) {
+          const mmWorldL = this.renderer.screenToMinimapWorld(peekLeftAfter.x, peekLeftAfter.y);
+          if (mmWorldL) this.input.consumeLeftClick();
+        }
+        return;
+      }
+    }
+
     // Check minimap click first
     const peekLeft = this.input.leftClick;
     if (peekLeft && !peekLeft.box) {
@@ -398,9 +450,45 @@ export class Game {
     if (rightClick) {
       const selected = this.unitManager.getSelected();
       if (selected.length > 0) {
-        const worldPos = this.camera.screenToWorld(rightClick.x, rightClick.y);
+        const mmWorld = this.renderer.screenToMinimapWorld(rightClick.x, rightClick.y);
+        const worldPos = mmWorld || this.camera.screenToWorld(rightClick.x, rightClick.y);
         const tileX = Math.floor(worldPos.x / TILE_SIZE);
         const tileY = Math.floor(worldPos.y / TILE_SIZE);
+
+        // Minimap right-click: always treat as move order to that world location.
+        if (mmWorld) {
+          const clampedX = Math.max(0, Math.min(MAP_WIDTH - 1, tileX));
+          const clampedY = Math.max(0, Math.min(MAP_HEIGHT - 1, tileY));
+          const landSelected = selected.filter(u => !u.naval);
+          const navalSelected = selected.filter(u => u.naval);
+          const cols = Math.max(1, Math.ceil(Math.sqrt(Math.max(1, landSelected.length))));
+
+          for (let i = 0; i < landSelected.length; i++) {
+            const offsetX = (i % cols) - Math.floor(cols / 2);
+            const offsetY = Math.floor(i / cols) - Math.floor(landSelected.length / cols / 2);
+            let tx = Math.max(0, Math.min(MAP_WIDTH - 1, clampedX + offsetX));
+            let ty = Math.max(0, Math.min(MAP_HEIGHT - 1, clampedY + offsetY));
+            if (!this.map.isWalkable(tx, ty)) {
+              tx = clampedX;
+              ty = clampedY;
+            }
+            landSelected[i].moveTo(this.map, tx, ty);
+          }
+          for (const u of navalSelected) {
+            if (this.map.isSwimmable(clampedX, clampedY)) {
+              u.moveTo(this.map, clampedX, clampedY);
+            }
+          }
+
+          if (landSelected.length > 0 || navalSelected.length > 0) {
+            sfxMove();
+            this.renderer.addMoveMarker(
+              clampedX * TILE_SIZE + TILE_SIZE / 2,
+              clampedY * TILE_SIZE + TILE_SIZE / 2
+            );
+          }
+          return;
+        }
 
         const targetUnit = this.unitManager.getUnitAtScreen(rightClick.x, rightClick.y, this.camera);
         const targetBuilding = this.buildingManager.getBuildingAtScreen(rightClick.x, rightClick.y, this.camera);

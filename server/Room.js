@@ -200,6 +200,38 @@ export class Room {
 
     if (teams.length < 2) return false;
 
+    // Prevent double-starting during countdown
+    this.status = 'COUNTDOWN';
+    this._broadcastRoomUpdate();
+
+    const COUNTDOWN_SECS = 3;
+    let remaining = COUNTDOWN_SECS;
+
+    this._broadcastAll({ type: 'COUNTDOWN', count: remaining });
+
+    this._countdownRef = setInterval(() => {
+      remaining--;
+      if (remaining > 0) {
+        this._broadcastAll({ type: 'COUNTDOWN', count: remaining });
+      } else {
+        clearInterval(this._countdownRef);
+        this._countdownRef = null;
+        this._launchGame(teams);
+      }
+    }, 1000);
+
+    return true;
+  }
+
+  _broadcastAll(payload) {
+    for (let slot = 0; slot < this.players.length; slot++) {
+      const p = this.players[slot];
+      if (!p || !p.connected) continue;
+      safeSend(p.ws, payload);
+    }
+  }
+
+  _launchGame(teams) {
     console.log(`[Room ${this.code}] Starting game with teams: [${teams}], ${this.engine ? 'engine exists' : 'creating engine'}`);
     this.engine = new GameEngine({ teams });
     this.status = 'RUNNING';
@@ -219,6 +251,8 @@ export class Room {
 
     this.intervalRef = setInterval(() => this._tick(), TICK_MS);
 
+    this._broadcastAll({ type: 'COUNTDOWN', count: 0 });
+
     for (let slot = 0; slot < this.players.length; slot++) {
       const p = this.players[slot];
       if (!p || !p.connected) continue;
@@ -232,7 +266,6 @@ export class Room {
 
     this._broadcastState();
     this._broadcastRoomUpdate();
-    return true;
   }
 
   pauseGame() {
