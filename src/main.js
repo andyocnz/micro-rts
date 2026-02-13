@@ -40,8 +40,18 @@ let resumeSectionEl;
 function getSocketUrl() {
   const fromQuery = new URLSearchParams(window.location.search).get('ws');
   if (fromQuery) return fromQuery;
-  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${protocol}://${window.location.hostname}:8080`;
+
+  const saved = localStorage.getItem('ws_url_override');
+  if (saved) return saved;
+
+  const host = window.location.hostname;
+  const isLocal = host === 'localhost' || host === '127.0.0.1';
+  if (isLocal) {
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    return `${protocol}://${host}:8080`;
+  }
+
+  return 'wss://micro-rts.onrender.com';
 }
 
 function setStatus(text) {
